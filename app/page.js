@@ -22,7 +22,6 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Состояния для голосовых сообщений
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -102,14 +101,13 @@ export default function Home() {
     if (type === 'text') setNewMessage('');
   };
 
-  // Загрузка фото
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}.${fileExt}`;
-    const filePath = `images/${fileName}`;
+    const filePath = `${fileName}`;
 
     const { error } = await supabase.storage.from('media').upload(filePath, file);
     if (error) { alert('Ошибка загрузки фото: ' + error.message); return; }
@@ -118,7 +116,6 @@ export default function Home() {
     sendMessage('image', `[IMAGE]:${publicUrl}`);
   };
 
-  // Запись и отправка голосового сообщения
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -132,12 +129,11 @@ export default function Home() {
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const fileName = `voice_${Date.now()}.webm`;
-        const filePath = `voices/${fileName}`;
 
-        const { error } = await supabase.storage.from('media').upload(filePath, audioBlob);
-        if (error) { alert('Ошибка загрузки голосового'); return; }
+        const { error } = await supabase.storage.from('media').upload(fileName, audioBlob);
+        if (error) { alert('Ошибка загрузки голосового: ' + error.message); return; }
 
-        const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(filePath);
+        const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(fileName);
         sendMessage('voice', `[VOICE]:${publicUrl}`);
       };
 
@@ -188,7 +184,7 @@ export default function Home() {
   if (!session) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#030712', fontFamily: 'system-ui, sans-serif', padding: '16px' }}>
-        <div style={{ width: '100%', maxWidth: '380px', padding: '32px 24px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '20px', border: '1px solid rgba(56, 189, 248, 0.3)', boxShadow: '0 0 25px rgba(56, 189, 248, 0.15)', color: '#f8fafc' }}>
+        <div style={{ width: '100%', maxWidth: '380px', padding: '32px 24px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '20px', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#f8fafc' }}>
           <h2 style={{ margin: '0 0 8px 0', textAlign: 'center', fontSize: '28px', color: '#38bdf8' }}>DroJent</h2>
           <p style={{ margin: '0 0 24px 0', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>Neon Cyber Messenger</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -238,12 +234,12 @@ export default function Home() {
       <div style={{ flex: 1, display: !activeChat ? 'none' : 'flex', flexDirection: 'column', height: '100%', background: '#030712' }} className="chat-area">
         {activeChat && (
           <>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <button onClick={() => { setActiveChat(null); setActiveUser(null); }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'transparent', color: '#38bdf8', fontSize: '13px' }}>← Назад</button>
-                <h3 style={{ margin: 0, fontSize: '16px', color: '#38bdf8' }}>@{activeUser?.username}</h3>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                <button onClick={() => { setActiveChat(null); setActiveUser(null); }} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'transparent', color: '#38bdf8', fontSize: '12px', flexShrink: 0 }}>← Назад</button>
+                <h3 style={{ margin: 0, fontSize: '15px', color: '#38bdf8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>@{activeUser?.username}</h3>
               </div>
-              <button onClick={deleteChat} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px' }}>Удалить чат</button>
+              <button onClick={deleteChat} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px', flexShrink: 0 }}>🗑️</button>
             </div>
 
             <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -255,11 +251,11 @@ export default function Home() {
 
                 return (
                   <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-                    <div onClick={() => isMe && deleteMessage(msg.id)} style={{ background: isMe ? '#2563eb' : '#1e293b', color: '#fff', padding: '10px 14px', borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px', maxWidth: '80%', fontSize: '14px' }}>
+                    <div onClick={() => isMe && deleteMessage(msg.id)} style={{ background: isMe ? '#2563eb' : '#1e293b', color: '#fff', padding: '10px 14px', borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px', maxWidth: '85%', fontSize: '14px' }}>
                       {isImage ? (
-                        <img src={msg.content.replace('[IMAGE]:', '')} alt="Photo" style={{ maxWidth: '100%', borderRadius: '8px', maxHeight: '250px' }} />
+                        <img src={msg.content.replace('[IMAGE]:', '')} alt="Photo" style={{ maxWidth: '100%', borderRadius: '8px', maxHeight: '250px', display: 'block' }} />
                       ) : isVoice ? (
-                        <audio controls src={msg.content.replace('[VOICE]:', '')} style={{ maxWidth: '200px' }} />
+                        <audio controls src={msg.content.replace('[VOICE]:', '')} style={{ maxWidth: '200px', display: 'block' }} />
                       ) : (
                         <div>{msg.content}</div>
                       )}
@@ -273,18 +269,18 @@ export default function Home() {
               })}
             </div>
 
-            <form onSubmit={(e) => { e.preventDefault(); sendMessage('text'); }} style={{ padding: '12px 16px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <label style={{ cursor: 'pointer', padding: '10px', background: '#1e293b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <form onSubmit={(e) => { e.preventDefault(); sendMessage('text'); }} style={{ padding: '12px 10px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <label style={{ cursor: 'pointer', padding: '8px', background: '#1e293b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
                 📷
                 <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
               </label>
 
-              <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '10px', background: isRecording ? '#ef4444' : '#1e293b', border: 'none', borderRadius: '50%', color: '#fff', cursor: 'pointer' }}>
+              <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '8px', background: isRecording ? '#ef4444' : '#1e293b', border: 'none', borderRadius: '50%', color: '#fff', cursor: 'pointer', fontSize: '14px' }}>
                 {isRecording ? '⏹️' : '🎙️'}
               </button>
 
-              <input style={{ flex: 1, padding: '12px 16px', borderRadius: '24px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', outline: 'none', fontSize: '14px' }} placeholder={isRecording ? "Идет запись..." : "Написать сообщение..."} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} disabled={isRecording} />
-              <button type="submit" style={{ padding: '12px 20px', borderRadius: '24px', border: 'none', background: '#38bdf8', color: '#000', fontWeight: 'bold' }}>➔</button>
+              <input style={{ flex: 1, minWidth: 0, padding: '10px 14px', borderRadius: '24px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', outline: 'none', fontSize: '14px' }} placeholder={isRecording ? "Запись..." : "Сообщение..."} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} disabled={isRecording} />
+              <button type="submit" style={{ padding: '10px 16px', borderRadius: '24px', border: 'none', background: '#38bdf8', color: '#000', fontWeight: 'bold' }}>➔</button>
             </form>
           </>
         )}
