@@ -28,9 +28,10 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Загружаем только активные диалоги пользователя
+  // Загружаем список открытых чатов
   const fetchMyChats = async () => {
     if (!session) return;
+    
     const { data: participants } = await supabase
       .from('chat_participants')
       .select('chat_id')
@@ -44,7 +45,9 @@ export default function Home() {
         .in('chat_id', chatIds)
         .neq('user_id', session.user.id);
 
-      if (otherParticipants) setMyChats(otherParticipants);
+      if (otherParticipants) {
+        setMyChats(otherParticipants);
+      }
     } else {
       setMyChats([]);
     }
@@ -54,7 +57,7 @@ export default function Home() {
     fetchMyChats();
   }, [session]);
 
-  // Поиск только по введённому тексту
+  // Поиск по username
   useEffect(() => {
     if (!session) return;
 
@@ -77,7 +80,7 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [searchQuery, session]);
 
-  // Загрузка сообщений, отметка прочтения и Realtime
+  // Загрузка сообщений и Realtime
   useEffect(() => {
     if (!activeChat) {
       setMessages([]);
@@ -93,7 +96,6 @@ export default function Home() {
 
       if (data) setMessages(data);
 
-      // Помечаем чужие сообщения как прочитанные
       await supabase
         .from('messages')
         .update({ is_read: true })
@@ -120,6 +122,7 @@ export default function Home() {
     };
   }, [activeChat, session]);
 
+  // Создать или открыть чат (и сразу закрепить в списке)
   const startChatWithUser = async (targetUser) => {
     setActiveUser(targetUser);
     setSearchQuery('');
@@ -141,6 +144,7 @@ export default function Home() {
 
       if (commonChat && commonChat.length > 0) {
         setActiveChat(commonChat[0].chat_id);
+        fetchMyChats();
         return;
       }
     }
@@ -180,7 +184,7 @@ export default function Home() {
   };
 
   const deleteChat = async () => {
-    if (confirm('Удалить весь чат и всю переписку?')) {
+    if (confirm('Удалить чат?')) {
       await supabase.from('chats').delete().eq('id', activeChat);
       setActiveChat(null);
       setActiveUser(null);
@@ -235,7 +239,7 @@ export default function Home() {
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', background: '#030712', fontFamily: 'system-ui, sans-serif', color: '#f8fafc', overflow: 'hidden' }}>
       
-      {/* Левая панель */}
+      {/* Список контактов / чатов */}
       <div style={{
         width: activeChat ? '320px' : '100%',
         display: activeChat ? 'none' : 'flex',
@@ -262,7 +266,7 @@ export default function Home() {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {displayedList.length === 0 ? (
             <div style={{ padding: '20px', color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
-              {searchQuery.trim() ? 'Никто не найден' : 'Введите username в поиске, чтобы начать чат'}
+              {searchQuery.trim() ? 'Никто не найден' : 'Найдите пользователя через поиск, чтобы открыть чат'}
             </div>
           ) : (
             displayedList.map((u) => u && (
@@ -283,7 +287,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Правая панель (Чат) */}
+      {/* Окно переписки */}
       <div style={{ flex: 1, display: !activeChat ? 'none' : 'flex', flexDirection: 'column', height: '100%', background: '#030712' }} className="chat-area">
         {activeChat && (
           <>
