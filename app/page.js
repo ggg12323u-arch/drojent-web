@@ -27,7 +27,6 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Поиск пользователей по username
   useEffect(() => {
     if (!session) return;
 
@@ -55,7 +54,6 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [searchQuery, session]);
 
-  // Загрузка сообщений и Realtime
   useEffect(() => {
     if (!activeChat) {
       setMessages([]);
@@ -90,7 +88,6 @@ export default function Home() {
     };
   }, [activeChat]);
 
-  // Открыть или создать чат
   const startChatWithUser = async (targetUser) => {
     setActiveUser(targetUser);
     
@@ -129,7 +126,7 @@ export default function Home() {
     setLoading(true);
     if (type === 'signup') {
       if (!username.trim()) {
-        alert('Укажите Username при регистрации!');
+        alert('Укажите Username!');
         setLoading(false);
         return;
       }
@@ -162,36 +159,122 @@ export default function Home() {
     setNewMessage('');
   };
 
+  // Экран логина
   if (!session) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', fontFamily: 'system-ui, sans-serif', color: '#f8fafc' }}>
-        <div style={{ width: '100%', maxWidth: '380px', padding: '28px', background: '#1e293b', borderRadius: '16px', border: '1px solid #334155' }}>
-          <h2 style={{ margin: '0 0 8px 0', textAlign: 'center' }}>DroJent</h2>
-          <p style={{ margin: '0 0 20px 0', color: '#94a3b8', fontSize: '14px', textAlign: 'center' }}>Вход и регистрация</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#030712',
+        fontFamily: 'system-ui, sans-serif',
+        padding: '16px',
+        boxSizing: 'border-box'
+      }}>
+        <div style={{
+          width: '100%',
+          maxWidth: '380px',
+          padding: '32px 24px',
+          background: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(56, 189, 248, 0.3)',
+          boxShadow: '0 0 25px rgba(56, 189, 248, 0.15)',
+          color: '#f8fafc'
+        }}>
+          <h2 style={{
+            margin: '0 0 8px 0',
+            textAlign: 'center',
+            fontSize: '28px',
+            fontWeight: '800',
+            background: 'linear-gradient(135deg, #38bdf8 0%, #3b82f6 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 10px rgba(56,189,248,0.5))'
+          }}>DroJent</h2>
+          <p style={{ margin: '0 0 24px 0', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>Neon Cyber Messenger</p>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <input 
-              style={{ padding: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#fff' }} 
+              style={{
+                padding: '12px 16px',
+                borderRadius: '10px',
+                border: '1px solid rgba(56, 189, 248, 0.2)',
+                background: '#0b0f19',
+                color: '#fff',
+                outline: 'none',
+                fontSize: '14px'
+              }} 
               placeholder="Username (для регистрации)" 
               value={username} 
               onChange={(e) => setUsername(e.target.value)} 
             />
             <input 
-              style={{ padding: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#fff' }} 
+              style={{
+                padding: '12px 16px',
+                borderRadius: '10px',
+                border: '1px solid rgba(56, 189, 248, 0.2)',
+                background: '#0b0f19',
+                color: '#fff',
+                outline: 'none',
+                fontSize: '14px'
+              }} 
               type="email" 
               placeholder="Email" 
               value={email} 
               onChange={(e) => setEmail(e.target.value)} 
             />
             <input 
-              style={{ padding: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#fff' }} 
+              style={{
+                padding: '12px 16px',
+                borderRadius: '10px',
+                border: '1px solid rgba(56, 189, 248, 0.2)',
+                background: '#0b0f19',
+                color: '#fff',
+                outline: 'none',
+                fontSize: '14px'
+              }} 
               type="password" 
               placeholder="Пароль" 
               value={password} 
               onChange={(e) => setPassword(e.target.value)} 
             />
-            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-              <button disabled={loading} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => handleAuth('login')}>Войти</button>
-              <button disabled={loading} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #334155', background: 'transparent', color: '#fff', cursor: 'pointer' }} onClick={() => handleAuth('signup')}>Регистрация</button>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+              <button 
+                disabled={loading} 
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  boxShadow: '0 0 15px rgba(37, 99, 235, 0.4)',
+                  cursor: 'pointer'
+                }} 
+                onClick={() => handleAuth('login')}
+              >
+                Войти
+              </button>
+              <button 
+                disabled={loading} 
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  background: 'transparent',
+                  color: '#38bdf8',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }} 
+                onClick={() => handleAuth('signup')}
+              >
+                Регистрация
+              </button>
             </div>
           </div>
         </div>
@@ -200,16 +283,69 @@ export default function Home() {
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', background: '#0f172a', fontFamily: 'system-ui, sans-serif', color: '#f8fafc' }}>
-      <div style={{ width: '320px', borderRight: '1px solid #334155', background: '#1e293b', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '16px', borderBottom: '1px solid #334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '18px' }}>DroJent</h3>
-          <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: '#0f172a', color: '#94a3b8', fontSize: '12px', cursor: 'pointer' }}>Выйти</button>
+    <div style={{
+      height: '100vh',
+      width: '100vw',
+      display: 'flex',
+      background: '#030712',
+      fontFamily: 'system-ui, sans-serif',
+      color: '#f8fafc',
+      overflow: 'hidden'
+    }}>
+      {/* Левая панель (Контакты) */}
+      <div style={{
+        width: activeChat ? '320px' : '100%',
+        maxWidth: '100%',
+        display: activeChat ? 'none' : 'flex',
+        flexDirection: 'column',
+        borderRight: '1px solid rgba(56, 189, 248, 0.15)',
+        background: '#0b0f19',
+        height: '100%'
+      }} className="sidebar">
+        
+        <div style={{
+          padding: '16px',
+          borderBottom: '1px solid rgba(56, 189, 248, 0.15)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <h3 style={{
+            margin: 0,
+            fontSize: '20px',
+            fontWeight: '800',
+            color: '#38bdf8',
+            textShadow: '0 0 10px rgba(56, 189, 248, 0.5)'
+          }}>DroJent</h3>
+          <button 
+            onClick={() => supabase.auth.signOut()} 
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              background: 'transparent',
+              color: '#f87171',
+              fontSize: '12px',
+              cursor: 'pointer'
+            }}
+          >
+            Выйти
+          </button>
         </div>
 
-        <div style={{ padding: '12px', borderBottom: '1px solid #334155' }}>
+        <div style={{ padding: '12px', borderBottom: '1px solid rgba(56, 189, 248, 0.1)' }}>
           <input 
-            style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              border: '1px solid rgba(56, 189, 248, 0.2)',
+              background: '#030712',
+              color: '#fff',
+              fontSize: '13px',
+              outline: 'none',
+              boxSizing: 'border-box'
+            }}
             placeholder="🔍 Поиск по @username..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -218,28 +354,38 @@ export default function Home() {
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {searchResults.length === 0 ? (
-            <div style={{ padding: '16px', color: '#64748b', fontSize: '13px', textAlign: 'center' }}>Никого не найдено</div>
+            <div style={{ padding: '20px', color: '#64748b', fontSize: '13px', textAlign: 'center' }}>Пользователи не найдены</div>
           ) : (
             searchResults.map((u) => (
               <div 
                 key={u.id} 
                 onClick={() => startChatWithUser(u)}
                 style={{
-                  padding: '12px 16px',
-                  borderBottom: '1px solid #1e293b',
+                  padding: '14px 16px',
+                  borderBottom: '1px solid rgba(255,255,255,0.03)',
                   cursor: 'pointer',
-                  background: activeUser?.id === u.id ? '#334155' : 'transparent',
+                  background: activeUser?.id === u.id ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px'
                 }}
               >
-                <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 'bold',
+                  boxShadow: '0 0 10px rgba(56,189,248,0.3)'
+                }}>
                   {u.username?.[0]?.toUpperCase() || 'U'}
                 </div>
                 <div>
-                  <div style={{ fontWeight: '600', fontSize: '14px' }}>@{u.username || 'user'}</div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Открыть диалог</div>
+                  <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9' }}>@{u.username || 'user'}</div>
+                  <div style={{ fontSize: '12px', color: '#38bdf8' }}>Открыть чат</div>
                 </div>
               </div>
             ))
@@ -247,25 +393,55 @@ export default function Home() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      {/* Правая панель (Чат) */}
+      <div style={{
+        flex: 1,
+        display: !activeChat ? 'none' : 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: '#030712'
+      }} className="chat-area">
         {activeChat ? (
           <>
-            <div style={{ padding: '16px', borderBottom: '1px solid #334155', background: '#1e293b' }}>
-              <h3 style={{ margin: 0, fontSize: '16px' }}>Чат с @{activeUser?.username || 'пользователем'}</h3>
+            <div style={{
+              padding: '14px 16px',
+              borderBottom: '1px solid rgba(56, 189, 248, 0.15)',
+              background: '#0b0f19',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <button 
+                onClick={() => { setActiveChat(null); setActiveUser(null); }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  background: 'transparent',
+                  color: '#38bdf8',
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                ← Назад
+              </button>
+              <h3 style={{ margin: 0, fontSize: '16px', color: '#38bdf8' }}>Чат с @{activeUser?.username || 'пользователем'}</h3>
             </div>
 
-            <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {messages.map((msg) => {
                 const isMe = msg.sender_id === session.user.id;
                 return (
                   <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
                     <div style={{
-                      background: isMe ? '#2563eb' : '#334155',
+                      background: isMe ? 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)' : '#1e293b',
                       color: '#fff',
                       padding: '10px 14px',
-                      borderRadius: isMe ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                      maxWidth: '65%',
-                      fontSize: '14px'
+                      borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
+                      maxWidth: '80%',
+                      fontSize: '14px',
+                      boxShadow: isMe ? '0 0 12px rgba(37, 99, 235, 0.3)' : 'none',
+                      border: isMe ? 'none' : '1px solid rgba(255,255,255,0.05)'
                     }}>
                       {msg.content}
                     </div>
@@ -274,22 +450,59 @@ export default function Home() {
               })}
             </div>
 
-            <form onSubmit={sendMessage} style={{ padding: '16px', borderTop: '1px solid #334155', background: '#1e293b', display: 'flex', gap: '10px' }}>
+            <form onSubmit={sendMessage} style={{
+              padding: '12px 16px',
+              borderTop: '1px solid rgba(56, 189, 248, 0.15)',
+              background: '#0b0f19',
+              display: 'flex',
+              gap: '10px'
+            }}>
               <input 
-                style={{ flex: 1, padding: '12px 16px', borderRadius: '24px', border: '1px solid #334155', background: '#0f172a', color: '#fff', outline: 'none' }} 
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: '24px',
+                  border: '1px solid rgba(56, 189, 248, 0.2)',
+                  background: '#030712',
+                  color: '#fff',
+                  outline: 'none',
+                  fontSize: '14px'
+                }} 
                 placeholder="Написать сообщение..." 
                 value={newMessage} 
                 onChange={(e) => setNewMessage(e.target.value)} 
               />
-              <button type="submit" style={{ padding: '12px 20px', borderRadius: '24px', border: 'none', background: '#3b82f6', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Отправить</button>
+              <button 
+                type="submit" 
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: '24px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #38bdf8 0%, #2563eb 100%)',
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  boxShadow: '0 0 10px rgba(56, 189, 248, 0.4)',
+                  cursor: 'pointer'
+                }}
+              >
+                ➔
+              </button>
             </form>
           </>
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
-            Найдите пользователя слева через поиск, чтобы открыть приватный чат
-          </div>
-        )}
+        ) : null}
       </div>
+
+      <style jsx global>{`
+        @media (min-width: 640px) {
+          .sidebar {
+            display: flex !important;
+            width: 320px !important;
+          }
+          .chat-area {
+            display: flex !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
