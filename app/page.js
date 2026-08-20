@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,158 +22,137 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Состояния для голосовых сообщений
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
     return () => subscription.unsubscribe();
   }, []);
 
-  // Загружаем список открытых чатов
   const fetchMyChats = async () => {
     if (!session) return;
-    
-    const { data: participants } = await supabase
-      .from('chat_participants')
-      .select('chat_id')
-      .eq('user_id', session.user.id);
-
+    const { data: participants } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
     if (participants && participants.length > 0) {
       const chatIds = participants.map(p => p.chat_id);
-      const { data: otherParticipants } = await supabase
-        .from('chat_participants')
-        .select('chat_id, user_id, profiles(id, username)')
-        .in('chat_id', chatIds)
-        .neq('user_id', session.user.id);
-
-      if (otherParticipants) {
-        setMyChats(otherParticipants);
-      }
+      const { data: otherParticipants } = await supabase.from('chat_participants').select('chat_id, user_id, profiles(id, username)').in('chat_id', chatIds).neq('user_id', session.user.id);
+      if (otherParticipants) setMyChats(otherParticipants);
     } else {
       setMyChats([]);
     }
   };
 
-  useEffect(() => {
-    fetchMyChats();
-  }, [session]);
+  useEffect(() => { fetchMyChats(); }, [session]);
 
-  // Поиск по username
   useEffect(() => {
     if (!session) return;
-
     const searchUsers = async () => {
-      if (!searchQuery.trim()) {
-        setSearchResults([]);
-        return;
-      }
-
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .neq('id', session.user.id)
-        .ilike('username', `%${searchQuery}%`);
-
+      if (!searchQuery.trim()) { setSearchResults([]); return; }
+      const { data } = await supabase.from('profiles').select('*').neq('id', session.user.id).ilike('username', `%${searchQuery}%`);
       if (data) setSearchResults(data);
     };
-
     const timer = setTimeout(searchUsers, 300);
     return () => clearTimeout(timer);
   }, [searchQuery, session]);
 
-  // Загрузка сообщений и Realtime
   useEffect(() => {
-    if (!activeChat) {
-      setMessages([]);
-      return;
-    }
-
+    if (!activeChat) { setMessages([]); return; }
     const fetchMessages = async () => {
-      const { data } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('chat_id', activeChat)
-        .order('created_at', { ascending: true });
-
+      const { data } = await supabase.from('messages').select('*').eq('chat_id', activeChat).order('created_at', { ascending: true });
       if (data) setMessages(data);
-
-      await supabase
-        .from('messages')
-        .update({ is_read: true })
-        .eq('chat_id', activeChat)
-        .neq('sender_id', session.user.id);
+      await supabase.from('messages').update({ is_read: true }).eq('chat_id', activeChat).neq('sender_id', session.user.id);
     };
-
     fetchMessages();
 
-    const channel = supabase
-      .channel(`chat:${activeChat}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'messages',
-        filter: `chat_id=eq.${activeChat}`
-      }, () => {
-        fetchMessages();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const channel = supabase.channel(`chat:${activeChat}`).on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${activeChat}` }, () => { fetchMessages(); }).subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [activeChat, session]);
 
-  // Создать или открыть чат (и сразу закрепить в списке)
   const startChatWithUser = async (targetUser) => {
     setActiveUser(targetUser);
     setSearchQuery('');
-    
-    const { data: myPart } = await supabase
-      .from('chat_participants')
-      .select('chat_id')
-      .eq('user_id', session.user.id);
-
+    const { data: myPart } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
     const myChatIds = myPart?.map(c => c.chat_id) || [];
-
     if (myChatIds.length > 0) {
-      const { data: commonChat } = await supabase
-        .from('chat_participants')
-        .select('chat_id')
-        .eq('user_id', targetUser.id)
-        .in('chat_id', myChatIds)
-        .limit(1);
-
-      if (commonChat && commonChat.length > 0) {
-        setActiveChat(commonChat[0].chat_id);
-        fetchMyChats();
-        return;
-      }
+      const { data: commonChat } = await supabase.from('chat_participants').select('chat_id').eq('user_id', targetUser.id).in('chat_id', myChatIds).limit(1);
+      if (commonChat && commonChat.length > 0) { setActiveChat(commonChat[0].chat_id); fetchMyChats(); return; }
     }
-
     const { data: newChat } = await supabase.from('chats').insert([{}]).select().single();
     if (newChat) {
-      await supabase.from('chat_participants').insert([
-        { chat_id: newChat.id, user_id: session.user.id },
-        { chat_id: newChat.id, user_id: targetUser.id }
-      ]);
+      await supabase.from('chat_participants').insert([{ chat_id: newChat.id, user_id: session.user.id }, { chat_id: newChat.id, user_id: targetUser.id }]);
       setActiveChat(newChat.id);
       fetchMyChats();
     }
   };
 
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !activeChat) return;
+  const sendMessage = async (type = 'text', mediaUrl = '') => {
+    if (type === 'text' && !newMessage.trim()) return;
+    if (!activeChat) return;
 
-    await supabase.from('messages').insert([
-      {
-        chat_id: activeChat,
-        sender_id: session.user.id,
-        content: newMessage,
-        is_read: false
-      },
-    ]);
+    await supabase.from('messages').insert([{
+      chat_id: activeChat,
+      sender_id: session.user.id,
+      content: type === 'text' ? newMessage : mediaUrl,
+      is_read: false
+    }]);
 
-    setNewMessage('');
+    if (type === 'text') setNewMessage('');
+  };
+
+  // Загрузка фото
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}.${fileExt}`;
+    const filePath = `images/${fileName}`;
+
+    const { error } = await supabase.storage.from('media').upload(filePath, file);
+    if (error) { alert('Ошибка загрузки фото: ' + error.message); return; }
+
+    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(filePath);
+    sendMessage('image', `[IMAGE]:${publicUrl}`);
+  };
+
+  // Запись и отправка голосового сообщения
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const fileName = `voice_${Date.now()}.webm`;
+        const filePath = `voices/${fileName}`;
+
+        const { error } = await supabase.storage.from('media').upload(filePath, audioBlob);
+        if (error) { alert('Ошибка загрузки голосового'); return; }
+
+        const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(filePath);
+        sendMessage('voice', `[VOICE]:${publicUrl}`);
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (err) {
+      alert('Дайте доступ к микрофону!');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
   };
 
   const deleteMessage = async (msgId) => {
@@ -195,16 +174,8 @@ export default function Home() {
   const handleAuth = async (type) => {
     setLoading(true);
     if (type === 'signup') {
-      if (!username.trim()) {
-        alert('Укажите Username!');
-        setLoading(false);
-        return;
-      }
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { username } }
-      });
+      if (!username.trim()) { alert('Укажите Username!'); setLoading(false); return; }
+      const { error } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
       if (error) alert(error.message);
       else alert('Регистрация успешна! Нажми "Войти"');
     } else {
@@ -238,56 +209,32 @@ export default function Home() {
 
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', background: '#030712', fontFamily: 'system-ui, sans-serif', color: '#f8fafc', overflow: 'hidden' }}>
-      
-      {/* Список контактов / чатов */}
-      <div style={{
-        width: activeChat ? '320px' : '100%',
-        display: activeChat ? 'none' : 'flex',
-        flexDirection: 'column',
-        borderRight: '1px solid rgba(56, 189, 248, 0.15)',
-        background: '#0b0f19',
-        height: '100%'
-      }} className="sidebar">
-        
+      <div style={{ width: activeChat ? '320px' : '100%', display: activeChat ? 'none' : 'flex', flexDirection: 'column', borderRight: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', height: '100%' }} className="sidebar">
         <div style={{ padding: '16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: '20px', color: '#38bdf8' }}>DroJent</h3>
           <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px' }}>Выйти</button>
         </div>
 
         <div style={{ padding: '12px', borderBottom: '1px solid rgba(56, 189, 248, 0.1)' }}>
-          <input 
-            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-            placeholder="🔍 Поиск по @username..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+          <input style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} placeholder="🔍 Поиск по @username..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {displayedList.length === 0 ? (
             <div style={{ padding: '20px', color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
-              {searchQuery.trim() ? 'Никто не найден' : 'Найдите пользователя через поиск, чтобы открыть чат'}
+              {searchQuery.trim() ? 'Никто не найден' : 'Найдите пользователя через поиск'}
             </div>
           ) : (
             displayedList.map((u) => u && (
-              <div 
-                key={u.id} 
-                onClick={() => startChatWithUser(u)}
-                style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', background: activeUser?.id === u.id ? 'rgba(56, 189, 248, 0.1)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px' }}
-              >
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                  {u.username?.[0]?.toUpperCase() || 'U'}
-                </div>
-                <div>
-                  <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9' }}>@{u.username || 'user'}</div>
-                </div>
+              <div key={u.id} onClick={() => startChatWithUser(u)} style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', background: activeUser?.id === u.id ? 'rgba(56, 189, 248, 0.1)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>{u.username?.[0]?.toUpperCase() || 'U'}</div>
+                <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9' }}>@{u.username || 'user'}</div>
               </div>
             ))
           )}
         </div>
       </div>
 
-      {/* Окно переписки */}
       <div style={{ flex: 1, display: !activeChat ? 'none' : 'flex', flexDirection: 'column', height: '100%', background: '#030712' }} className="chat-area">
         {activeChat && (
           <>
@@ -303,29 +250,22 @@ export default function Home() {
               {messages.map((msg) => {
                 const isMe = msg.sender_id === session.user.id;
                 const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isImage = msg.content.startsWith('[IMAGE]:');
+                const isVoice = msg.content.startsWith('[VOICE]:');
+
                 return (
                   <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-                    <div 
-                      onClick={() => isMe && deleteMessage(msg.id)}
-                      title={isMe ? "Нажмите, чтобы удалить" : ""}
-                      style={{
-                        background: isMe ? '#2563eb' : '#1e293b',
-                        color: '#fff',
-                        padding: '10px 14px',
-                        borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
-                        maxWidth: '80%',
-                        fontSize: '14px',
-                        cursor: isMe ? 'pointer' : 'default'
-                      }}
-                    >
-                      <div>{msg.content}</div>
+                    <div onClick={() => isMe && deleteMessage(msg.id)} style={{ background: isMe ? '#2563eb' : '#1e293b', color: '#fff', padding: '10px 14px', borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px', maxWidth: '80%', fontSize: '14px' }}>
+                      {isImage ? (
+                        <img src={msg.content.replace('[IMAGE]:', '')} alt="Photo" style={{ maxWidth: '100%', borderRadius: '8px', maxHeight: '250px' }} />
+                      ) : isVoice ? (
+                        <audio controls src={msg.content.replace('[VOICE]:', '')} style={{ maxWidth: '200px' }} />
+                      ) : (
+                        <div>{msg.content}</div>
+                      )}
                       <div style={{ fontSize: '10px', color: isMe ? '#93c5fd' : '#94a3b8', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                         <span>{time}</span>
-                        {isMe && (
-                          <span style={{ fontWeight: 'bold' }}>
-                            {msg.is_read ? '✓✓' : '✓'}
-                          </span>
-                        )}
+                        {isMe && <span style={{ fontWeight: 'bold' }}>{msg.is_read ? '✓✓' : '✓'}</span>}
                       </div>
                     </div>
                   </div>
@@ -333,8 +273,17 @@ export default function Home() {
               })}
             </div>
 
-            <form onSubmit={sendMessage} style={{ padding: '12px 16px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', gap: '10px' }}>
-              <input style={{ flex: 1, padding: '12px 16px', borderRadius: '24px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', outline: 'none', fontSize: '14px' }} placeholder="Написать сообщение..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} />
+            <form onSubmit={(e) => { e.preventDefault(); sendMessage('text'); }} style={{ padding: '12px 16px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <label style={{ cursor: 'pointer', padding: '10px', background: '#1e293b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                📷
+                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+              </label>
+
+              <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '10px', background: isRecording ? '#ef4444' : '#1e293b', border: 'none', borderRadius: '50%', color: '#fff', cursor: 'pointer' }}>
+                {isRecording ? '⏹️' : '🎙️'}
+              </button>
+
+              <input style={{ flex: 1, padding: '12px 16px', borderRadius: '24px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', outline: 'none', fontSize: '14px' }} placeholder={isRecording ? "Идет запись..." : "Написать сообщение..."} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} disabled={isRecording} />
               <button type="submit" style={{ padding: '12px 20px', borderRadius: '24px', border: 'none', background: '#38bdf8', color: '#000', fontWeight: 'bold' }}>➔</button>
             </form>
           </>
