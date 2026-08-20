@@ -16,21 +16,28 @@ export default function Home() {
   const [username, setUsername] = useState('');
   
   const [myProfile, setMyProfile] = useState(null);
-  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'profile'
-  
+  const [activeTab, setActiveTab] = useState('chats');
+
   const [editUsername, setEditUsername] = useState('');
   const [editBirthdate, setEditBirthdate] = useState('');
-  
+  const [avatarUrl, setAvatarUrl] = useState('');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [myChats, setMyChats] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
   const [activeUser, setActiveUser] = useState(null);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
-  
+
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Состояния действий с сообщениями
+  const [editingMsg, setEditingMsg] = useState(null);
+  const [replyingMsg, setReplyingMsg] = useState(null);
+  const [forwardingMsg, setForwardingMsg] = useState(null);
+  const [selectedMsgForMenu, setSelectedMsgForMenu] = useState(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
@@ -43,12 +50,10 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Автоскролл
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Загрузка своего профиля
   useEffect(() => {
     if (!session) return;
     const loadProfile = async () => {
@@ -57,6 +62,7 @@ export default function Home() {
         setMyProfile(data);
         setEditUsername(data.username || '');
         setEditBirthdate(data.birthdate || '');
+        setAvatarUrl(data.avatar_url || '');
       }
     };
     loadProfile();
@@ -69,7 +75,7 @@ export default function Home() {
       const chatIds = participants.map(p => p.chat_id);
       const { data: otherParticipants } = await supabase
         .from('chat_participants')
-        .select('chat_id, user_id, profiles(id, username, birthdate)')
+        .select('chat_id, user_id, profiles(id, username, birthdate, avatar_url, status_badge)')
         .in('chat_id', chatIds);
       
       if (otherParticipants) {
@@ -77,7 +83,7 @@ export default function Home() {
         chatIds.forEach(id => {
           const parts = otherParticipants.filter(p => p.chat_id === id);
           if (parts.length === 1 && parts[0].user_id === session.user.id) {
-            uniqueChats.push({ chat_id: id, profiles: { id: session.user.id, username: 'Избранное' } });
+            uniqueChats.push({ chat_id: id, profiles: { id: session.user.id, username: 'Избранное', avatar_url: myProfile?.avatar_url } });
           } else {
             const partner = parts.find(p => p.user_id !== session.user.id);
             if (partner) uniqueChats.push(partner);
@@ -90,9 +96,8 @@ export default function Home() {
     }
   };
 
-  useEffect(() => { fetchMyChats(); }, [session]);
+  useEffect(() => { fetchMyChats(); }, [session, myProfile]);
 
-  // Поиск по username
   useEffect(() => {
     if (!session) return;
     const searchUsers = async () => {
@@ -104,7 +109,6 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [searchQuery, session]);
 
-  // Realtime сообщения без дубликатов
   useEffect(() => {
     if (!activeChat) { setMessages([]); return; }
 
@@ -118,24 +122,8 @@ export default function Home() {
 
     const channel = supabase
       .channel(`realtime:chat_${activeChat}`)
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'messages', 
-        filter: `chat_id=eq.${activeChat}` 
-      }, (payload) => {
-        setMessages((prev) => {
-          if (prev.some(m => m.id === payload.new.id)) return prev;
-          return [...prev, payload.new];
-        });
-      })
-      .on('postgres_changes', {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'messages',
-        filter: `chat_id=eq.${activeChat}`
-      }, (payload) => {
-        setMessages((prev) => prev.filter(m => m.id !== payload.old.id));
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${activeChat}` }, () => {
+        fetchMessages();
       })
       .subscribe();
 
@@ -143,10 +131,61 @@ export default function Home() {
   }, [activeChat, session]);
 
   const startChatWithUser = async (targetUser) => {
+    if (forwardingMsg) {
+      // Пересылка сообщения
+      const isSaved = targetUser.id === session.user.id;
+      let targetChatId = null;
+
+      const { data: myPart } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
+      const myChatIds = myPart?.map(c => c.chat_id) || [];
+
+      if (myChatIds.length > 0) {
+        if (isSaved) {
+          for (let cid of myChatIds) {
+            const { data: parts } = await supabase.from('chat_participants').select('user_id').eq('chat_id', cid);
+            if (parts && parts.length === 1 && parts[0].user_id === session.user.id) {
+              targetChatId = cid; break;
+            }
+          }
+        } else {
+          const { data: common } = await supabase.from('chat_participants').select('chat_id').eq('user_id', targetUser.id).in('chat_id', myChatIds).limit(1);
+          if (common && common.length > 0) targetChatId = common[0].chat_id;
+        }
+      }
+
+      if (!targetChatId) {
+        const { data: newC } = await supabase.from('chats').insert([{}]).select().single();
+        if (newC) {
+          targetChatId = newC.id;
+          if (isSaved) {
+            await supabase.from('chat_participants').insert([{ chat_id: newC.id, user_id: session.user.id }]);
+          } else {
+            await supabase.from('chat_participants').insert([
+              { chat_id: newC.id, user_id: session.user.id },
+              { chat_id: newC.id, user_id: targetUser.id }
+            ]);
+          }
+        }
+      }
+
+      if (targetChatId) {
+        await supabase.from('messages').insert([{
+          chat_id: targetChatId,
+          sender_id: session.user.id,
+          content: `↪ Переслоно: ${forwardingMsg.content}`,
+          is_read: false
+        }]);
+        alert('Сообщение переслано!');
+        setForwardingMsg(null);
+        fetchMyChats();
+      }
+      return;
+    }
+
     setActiveUser(targetUser);
     setSearchQuery('');
-    
     const isSavedMessages = targetUser.id === session.user.id;
+
     const { data: myPart } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
     const myChatIds = myPart?.map(c => c.chat_id) || [];
 
@@ -186,18 +225,46 @@ export default function Home() {
   };
 
   const sendMessage = async (type = 'text', mediaUrl = '') => {
+    if (editingMsg) {
+      if (!newMessage.trim()) return;
+      await supabase.from('messages').update({ content: newMessage, is_edited: true }).eq('id', editingMsg.id);
+      setEditingMsg(null);
+      setNewMessage('');
+      return;
+    }
+
     const textToSend = type === 'text' ? newMessage : mediaUrl;
     if (type === 'text' && !textToSend.trim()) return;
     if (!activeChat) return;
 
     if (type === 'text') setNewMessage('');
 
+    let finalContent = textToSend;
+    if (replyingMsg) {
+      finalContent = `💬 [Ответ на: "${replyingMsg.content.slice(0, 30)}..."]\n${textToSend}`;
+      setReplyingMsg(null);
+    }
+
     await supabase.from('messages').insert([{
       chat_id: activeChat,
       sender_id: session.user.id,
-      content: textToSend,
+      content: finalContent,
       is_read: false
     }]);
+  };
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `avatar_${session.user.id}_${Date.now()}.${fileExt}`;
+
+    const { error } = await supabase.storage.from('media').upload(fileName, file);
+    if (!error) {
+      const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(fileName);
+      setAvatarUrl(publicUrl);
+    }
   };
 
   const handleImageUpload = async (e) => {
@@ -250,23 +317,25 @@ export default function Home() {
   };
 
   const saveProfile = async () => {
+    const statusBadge = session.user.email === DEV_EMAIL ? '👑 Developer' : 'ℹ️ User';
     const { error } = await supabase.from('profiles').update({
       username: editUsername,
-      birthdate: editBirthdate || null
+      birthdate: editBirthdate || null,
+      avatar_url: avatarUrl,
+      status_badge: statusBadge
     }).eq('id', session.user.id);
 
     if (error) alert('Ошибка сохранения: ' + error.message);
     else {
       alert('Профиль сохранен!');
-      setMyProfile(prev => ({ ...prev, username: editUsername, birthdate: editBirthdate }));
+      setMyProfile(prev => ({ ...prev, username: editUsername, birthdate: editBirthdate, avatar_url: avatarUrl, status_badge: statusBadge }));
     }
   };
 
   const deleteMessage = async (msgId) => {
-    if (confirm('Удалить сообщение?')) {
-      await supabase.from('messages').delete().eq('id', msgId);
-      setMessages(prev => prev.filter(m => m.id !== msgId));
-    }
+    await supabase.from('messages').delete().eq('id', msgId);
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+    setSelectedMsgForMenu(null);
   };
 
   const deleteChat = async () => {
@@ -323,12 +392,11 @@ export default function Home() {
         
         <div style={{ padding: '16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: '20px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            DroJent {isDeveloper && <span title="Developer">👑</span>}
+            DroJent {isDeveloper ? '👑' : ''}
           </h3>
           <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px' }}>Выйти</button>
         </div>
 
-        {/* Переключатель вкладок */}
         <div style={{ display: 'flex', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: '#070a12' }}>
           <button onClick={() => setActiveTab('chats')} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'chats' ? '#38bdf8' : '#64748b', borderBottom: activeTab === 'chats' ? '2px solid #38bdf8' : 'none', fontWeight: 'bold', cursor: 'pointer' }}>
             💬 Чаты
@@ -339,14 +407,23 @@ export default function Home() {
         </div>
 
         {activeTab === 'profile' ? (
-          /* Вкладка моёго профиля */
           <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto' }}>
             <div style={{ textAlign: 'center', margin: '10px 0' }}>
-              <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#2563eb', margin: '0 auto 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 'bold' }}>
-                {isDeveloper ? '👑' : (myProfile?.username?.[0]?.toUpperCase() || 'U')}
+              <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#2563eb', margin: '0 auto 10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 'bold', border: '2px solid #38bdf8' }}>
+                {avatarUrl ? <img src={avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (isDeveloper ? '👑' : (myProfile?.username?.[0]?.toUpperCase() || 'U'))}
               </div>
-              <h3 style={{ margin: 0, color: '#f8fafc' }}>@{myProfile?.username || 'user'}</h3>
-              {isDeveloper && <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>Developer</span>}
+              
+              <label style={{ cursor: 'pointer', color: '#38bdf8', fontSize: '12px', fontWeight: 'bold' }}>
+                📷 Изменить аватарку
+                <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+              </label>
+
+              <h3 style={{ margin: '10px 0 2px 0', color: '#f8fafc' }}>
+                @{myProfile?.username || 'user'} {isDeveloper ? '👑' : 'ℹ️'}
+              </h3>
+              <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>
+                {isDeveloper ? '👑 Developer' : 'ℹ️ User'}
+              </span>
             </div>
 
             <div>
@@ -364,7 +441,6 @@ export default function Home() {
             </button>
           </div>
         ) : (
-          /* Вкладка чатов */
           <>
             <div onClick={() => startChatWithUser({ id: session.user.id, username: 'Избранное' })} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', cursor: 'pointer', background: 'rgba(56, 189, 248, 0.05)', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#38bdf8', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '18px' }}>🔖</div>
@@ -386,11 +462,13 @@ export default function Home() {
               ) : (
                 displayedList.map((u) => u && (
                   <div key={u.id} onClick={() => startChatWithUser(u)} style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', background: activeUser?.id === u.id ? 'rgba(56, 189, 248, 0.1)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? '#38bdf8' : '#2563eb', color: u.id === session.user.id ? '#000' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                      {u.id === session.user.id ? '🔖' : (u.username?.[0]?.toUpperCase() || 'U')}
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? '#38bdf8' : '#2563eb', color: u.id === session.user.id ? '#000' : '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                      {u.avatar_url ? <img src={u.avatar_url} alt="Av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (u.id === session.user.id ? '🔖' : (u.username?.[0]?.toUpperCase() || 'U'))}
                     </div>
-                    <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9' }}>
+                    <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       {u.id === session.user.id ? 'Избранное' : `@${u.username || 'user'}`}
+                      {u.status_badge === '👑 Developer' && <span>👑</span>}
+                      {u.status_badge !== '👑 Developer' && u.id !== session.user.id && <span>ℹ️</span>}
                     </div>
                   </div>
                 ))
@@ -407,8 +485,10 @@ export default function Home() {
             <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
                 <button onClick={() => { setActiveChat(null); setActiveUser(null); }} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'transparent', color: '#38bdf8', fontSize: '12px', flexShrink: 0 }}>← Назад</button>
-                <h3 onClick={() => setShowUserProfileModal(true)} style={{ margin: 0, fontSize: '15px', color: '#38bdf8', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {activeUser?.id === session.user.id ? '🔖 Избранное' : `@${activeUser?.username} ℹ️`}
+                <h3 onClick={() => setShowUserProfileModal(true)} style={{ margin: 0, fontSize: '15px', color: '#38bdf8', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {activeUser?.id === session.user.id ? '🔖 Избранное' : `@${activeUser?.username}`}
+                  {activeUser?.status_badge === '👑 Developer' && <span>👑</span>}
+                  {activeUser?.status_badge !== '👑 Developer' && activeUser?.id !== session.user.id && <span>ℹ️</span>}
                 </h3>
               </div>
               <button onClick={deleteChat} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px', flexShrink: 0 }}>🗑️</button>
@@ -423,15 +503,20 @@ export default function Home() {
 
                 return (
                   <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-                    <div onClick={() => isMe && deleteMessage(msg.id)} style={{ background: isMe ? '#2563eb' : '#1e293b', color: '#fff', padding: '10px 14px', borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px', maxWidth: '85%', fontSize: '14px' }}>
+                    <div 
+                      onClick={() => setSelectedMsgForMenu(msg)}
+                      style={{ background: isMe ? '#2563eb' : '#1e293b', color: '#fff', padding: '10px 14px', borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px', maxWidth: '85%', fontSize: '14px', cursor: 'pointer' }}
+                    >
                       {isImage ? (
                         <img src={msg.content.replace('[IMAGE]:', '')} alt="Photo" style={{ maxWidth: '100%', borderRadius: '8px', maxHeight: '250px', display: 'block' }} />
                       ) : isVoice ? (
                         <audio controls src={msg.content.replace('[VOICE]:', '')} style={{ maxWidth: '200px', display: 'block' }} />
                       ) : (
-                        <div>{msg.content}</div>
+                        <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
                       )}
+                      
                       <div style={{ fontSize: '10px', color: isMe ? '#93c5fd' : '#94a3b8', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                        {msg.is_edited && <span style={{ fontStyle: 'italic' }}>изм.</span>}
                         <span>{time}</span>
                         {isMe && <span style={{ fontWeight: 'bold' }}>{msg.is_read ? '✓✓' : '✓'}</span>}
                       </div>
@@ -441,6 +526,16 @@ export default function Home() {
               })}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Меню ответа / редактирования */}
+            {(replyingMsg || editingMsg || forwardingMsg) && (
+              <div style={{ padding: '8px 16px', background: '#070a12', borderTop: '1px solid rgba(56, 189, 248, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                <span style={{ color: '#38bdf8' }}>
+                  {editingMsg ? '✏️ Редактирование...' : replyingMsg ? `💬 Ответ на: "${replyingMsg.content.slice(0, 20)}..."` : '↪ Пересылка сообщения...'}
+                </span>
+                <button onClick={() => { setEditingMsg(null); setReplyingMsg(null); setForwardingMsg(null); setNewMessage(''); }} style={{ border: 'none', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>✖</button>
+              </div>
+            )}
 
             <form onSubmit={(e) => { e.preventDefault(); sendMessage('text'); }} style={{ padding: '12px 10px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', gap: '6px', alignItems: 'center' }}>
               <label style={{ cursor: 'pointer', padding: '8px', background: '#1e293b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
@@ -459,14 +554,40 @@ export default function Home() {
         )}
       </div>
 
-      {/* Модальное окно профиля собеседника */}
+      {/* Контекстное меню сообщения */}
+      {selectedMsgForMenu && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '16px' }}>
+          <div style={{ width: '100%', maxWidth: '280px', background: '#0b0f19', borderRadius: '16px', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <button onClick={() => { setReplyingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }} style={{ padding: '10px', background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>💬 Ответить</button>
+            <button onClick={() => { setForwardingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); setActiveChat(null); alert('Выберите пользователя, которому переслать сообщение'); }} style={{ padding: '10px', background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>↪ Переслать</button>
+            
+            {selectedMsgForMenu.sender_id === session.user.id && !selectedMsgForMenu.content.startsWith('[IMAGE]:') && !selectedMsgForMenu.content.startsWith('[VOICE]:') && (
+              <button onClick={() => { setEditingMsg(selectedMsgForMenu); setNewMessage(selectedMsgForMenu.content); setSelectedMsgForMenu(null); }} style={{ padding: '10px', background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>✏️ Изменить</button>
+            )}
+
+            {selectedMsgForMenu.sender_id === session.user.id && (
+              <button onClick={() => deleteMessage(selectedMsgForMenu.id)} style={{ padding: '10px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #f87171', borderRadius: '8px', color: '#f87171', cursor: 'pointer', textAlign: 'left' }}>🗑️ Удалить</button>
+            )}
+
+            <button onClick={() => setSelectedMsgForMenu(null)} style={{ padding: '10px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', marginTop: '4px' }}>Отмена</button>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка профиля собеседника */}
       {showUserProfileModal && activeUser && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ width: '100%', maxWidth: '320px', background: '#0b0f19', borderRadius: '16px', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '20px', textAlign: 'center', color: '#fff' }}>
-            <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: '#2563eb', margin: '0 auto 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>
-              {activeUser.username?.[0]?.toUpperCase() || 'U'}
+            <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#2563eb', margin: '0 auto 10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>
+              {activeUser.avatar_url ? <img src={activeUser.avatar_url} alt="Av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (activeUser.username?.[0]?.toUpperCase() || 'U')}
             </div>
-            <h3 style={{ margin: '0 0 6px 0' }}>@{activeUser.username}</h3>
+            <h3 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+              @{activeUser.username}
+              {activeUser.status_badge === '👑 Developer' ? '👑' : 'ℹ️'}
+            </h3>
+            <p style={{ margin: '0 0 16px 0', fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>
+              {activeUser.status_badge || 'ℹ️ User'}
+            </p>
             <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#94a3b8' }}>
               📅 Дата рождения: {activeUser.birthdate || 'Не указана'}
             </p>
