@@ -8,6 +8,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const DEV_EMAIL = 'ggg12323u@gmail.com';
+const REACTION_EMOJIS = ['🔥', '❤️', '👍', '😂', '😮', '😢'];
 
 export default function Home() {
   const [session, setSession] = useState(null);
@@ -20,6 +21,7 @@ export default function Home() {
 
   const [editUsername, setEditUsername] = useState('');
   const [editBirthdate, setEditBirthdate] = useState('');
+  const [editCustomStatus, setEditCustomStatus] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,11 +31,16 @@ export default function Home() {
   const [activeUser, setActiveUser] = useState(null);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
 
+  // Истории (Stories)
+  const [stories, setStories] = useState([]);
+  const [activeStory, setActiveStory] = useState(null);
+
+  // Сообщения и Реакции
   const [messages, setMessages] = useState([]);
+  const [reactions, setReactions] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Состояния действий с сообщениями
   const [editingMsg, setEditingMsg] = useState(null);
   const [replyingMsg, setReplyingMsg] = useState(null);
   const [forwardingMsg, setForwardingMsg] = useState(null);
@@ -42,7 +49,7 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -50,9 +57,12 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // Плавный скролл вниз только при открытии чата или новом сообщении снизу
+  const scrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  };
 
   useEffect(() => {
     if (!session) return;
@@ -62,11 +72,23 @@ export default function Home() {
         setMyProfile(data);
         setEditUsername(data.username || '');
         setEditBirthdate(data.birthdate || '');
+        setEditCustomStatus(data.custom_status || '');
         setAvatarUrl(data.avatar_url || '');
       }
     };
     loadProfile();
+    fetchStories();
   }, [session]);
+
+  const fetchStories = async () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from('stories')
+      .select('*, profiles(id, username, avatar_url, status_badge)')
+      .gte('created_at', yesterday)
+      .order('created_at', { ascending: false });
+    if (data) setStories(data);
+  };
 
   const fetchMyChats = async () => {
     if (!session) return;
@@ -75,7 +97,7 @@ export default function Home() {
       const chatIds = participants.map(p => p.chat_id);
       const { data: otherParticipants } = await supabase
         .from('chat_participants')
-        .select('chat_id, user_id, profiles(id, username, birthdate, avatar_url, status_badge)')
+        .select('chat_id, user_id, profiles(id, username, birthdate, avatar_url, status_badge, custom_status)')
         .in('chat_id', chatIds);
       
       if (otherParticipants) {
@@ -83,7 +105,7 @@ export default function Home() {
         chatIds.forEach(id => {
           const parts = otherParticipants.filter(p => p.chat_id === id);
           if (parts.length === 1 && parts[0].user_id === session.user.id) {
-            uniqueChats.push({ chat_id: id, profiles: { id: session.user.id, username: 'Избранное', avatar_url: myProfile?.avatar_url } });
+            uniqueChats.push({ chat_id: id, profiles: { id: session.user.id, username: 'Избранное', avatar_url: myProfile?.avatar_url, custom_status: 'Мой личный чат' } });
           } else {
             const partner = parts.find(p => p.user_id !== session.user.id);
             if (partner) uniqueChats.push(partner);
@@ -109,30 +131,42 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [searchQuery, session]);
 
+  // Загрузка сообщений и реакций
   useEffect(() => {
-    if (!activeChat) { setMessages([]); return; }
+    if (!activeChat) { setMessages([]); setReactions([]); return; }
 
-    const fetchMessages = async () => {
-      const { data } = await supabase.from('messages').select('*').eq('chat_id', activeChat).order('created_at', { ascending: true });
-      if (data) setMessages(data);
+    const fetchMessagesAndReactions = async () => {
+      const { data: msgs } = await supabase.from('messages').select('*').eq('chat_id', activeChat).order('created_at', { ascending: true });
+      if (msgs) {
+        setMessages(msgs);
+        setTimeout(scrollToBottom, 50);
+        
+        const msgIds = msgs.map(m => m.id);
+        if (msgIds.length > 0) {
+          const { data: reactData } = await supabase.from('message_reactions').select('*').in('message_id', msgIds);
+          if (reactData) setReactions(reactData);
+        }
+      }
       await supabase.from('messages').update({ is_read: true }).eq('chat_id', activeChat).neq('sender_id', session.user.id);
     };
 
-    fetchMessages();
+    fetchMessagesAndReactions();
 
-    const channel = supabase
+    const msgChannel = supabase
       .channel(`realtime:chat_${activeChat}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${activeChat}` }, () => {
-        fetchMessages();
+        fetchMessagesAndReactions();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, () => {
+        fetchMessagesAndReactions();
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(msgChannel); };
   }, [activeChat, session]);
 
   const startChatWithUser = async (targetUser) => {
     if (forwardingMsg) {
-      // Пересылка сообщения
       const isSaved = targetUser.id === session.user.id;
       let targetChatId = null;
 
@@ -172,7 +206,7 @@ export default function Home() {
         await supabase.from('messages').insert([{
           chat_id: targetChatId,
           sender_id: session.user.id,
-          content: `↪ Переслоно: ${forwardingMsg.content}`,
+          content: `↪ Переслано: ${forwardingMsg.content}`,
           is_read: false
         }]);
         alert('Сообщение переслано!');
@@ -251,6 +285,34 @@ export default function Home() {
       content: finalContent,
       is_read: false
     }]);
+
+    setTimeout(scrollToBottom, 50);
+  };
+
+  const toggleReaction = async (msgId, emoji) => {
+    const existing = reactions.find(r => r.message_id === msgId && r.user_id === session.user.id && r.emoji === emoji);
+    if (existing) {
+      await supabase.from('message_reactions').delete().eq('id', existing.id);
+    } else {
+      await supabase.from('message_reactions').insert([{ message_id: msgId, user_id: session.user.id, emoji }]);
+    }
+    setSelectedMsgForMenu(null);
+  };
+
+  const handleStoryUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `story_${session.user.id}_${Date.now()}.${fileExt}`;
+
+    const { error } = await supabase.storage.from('media').upload(fileName, file);
+    if (!error) {
+      const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(fileName);
+      await supabase.from('stories').insert([{ user_id: session.user.id, media_url: publicUrl }]);
+      fetchStories();
+      alert('История выложена!');
+    }
   };
 
   const handleAvatarUpload = async (e) => {
@@ -321,6 +383,7 @@ export default function Home() {
     const { error } = await supabase.from('profiles').update({
       username: editUsername,
       birthdate: editBirthdate || null,
+      custom_status: editCustomStatus || null,
       avatar_url: avatarUrl,
       status_badge: statusBadge
     }).eq('id', session.user.id);
@@ -328,7 +391,7 @@ export default function Home() {
     if (error) alert('Ошибка сохранения: ' + error.message);
     else {
       alert('Профиль сохранен!');
-      setMyProfile(prev => ({ ...prev, username: editUsername, birthdate: editBirthdate, avatar_url: avatarUrl, status_badge: statusBadge }));
+      setMyProfile(prev => ({ ...prev, username: editUsername, birthdate: editBirthdate, custom_status: editCustomStatus, avatar_url: avatarUrl, status_badge: statusBadge }));
     }
   };
 
@@ -397,6 +460,28 @@ export default function Home() {
           <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px' }}>Выйти</button>
         </div>
 
+        {/* Панель историй (Stories) */}
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(56, 189, 248, 0.1)', display: 'flex', gap: '12px', overflowX: 'auto', background: '#070a12' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px dashed #38bdf8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+              ➕
+            </div>
+            <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>История</span>
+            <input type="file" accept="image/*" onChange={handleStoryUpload} style={{ display: 'none' }} />
+          </label>
+
+          {stories.map(st => (
+            <div key={st.id} onClick={() => setActiveStory(st)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', padding: '2px', border: '2px solid #38bdf8', background: '#0b0f19' }}>
+                <img src={st.media_url} alt="St" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              </div>
+              <span style={{ fontSize: '10px', color: '#f1f5f9', marginTop: '4px', maxWidth: '50px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                @{st.profiles?.username}
+              </span>
+            </div>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: '#070a12' }}>
           <button onClick={() => setActiveTab('chats')} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'chats' ? '#38bdf8' : '#64748b', borderBottom: activeTab === 'chats' ? '2px solid #38bdf8' : 'none', fontWeight: 'bold', cursor: 'pointer' }}>
             💬 Чаты
@@ -429,6 +514,11 @@ export default function Home() {
             <div>
               <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Username:</label>
               <input style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', outline: 'none', boxSizing: 'border-box' }} value={editUsername} onChange={(e) => setEditUsername(e.target.value)} />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Текстовый статус:</label>
+              <input style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', outline: 'none', boxSizing: 'border-box' }} placeholder="Например: Занят / Пишу код" value={editCustomStatus} onChange={(e) => setEditCustomStatus(e.target.value)} />
             </div>
 
             <div>
@@ -465,10 +555,13 @@ export default function Home() {
                     <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? '#38bdf8' : '#2563eb', color: u.id === session.user.id ? '#000' : '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
                       {u.avatar_url ? <img src={u.avatar_url} alt="Av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (u.id === session.user.id ? '🔖' : (u.username?.[0]?.toUpperCase() || 'U'))}
                     </div>
-                    <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {u.id === session.user.id ? 'Избранное' : `@${u.username || 'user'}`}
-                      {u.status_badge === '👑 Developer' && <span>👑</span>}
-                      {u.status_badge !== '👑 Developer' && u.id !== session.user.id && <span>ℹ️</span>}
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {u.id === session.user.id ? 'Избранное' : `@${u.username || 'user'}`}
+                        {u.status_badge === '👑 Developer' && <span>👑</span>}
+                        {u.status_badge !== '👑 Developer' && u.id !== session.user.id && <span>ℹ️</span>}
+                      </div>
+                      {u.custom_status && <div style={{ fontSize: '11px', color: '#38bdf8' }}>{u.custom_status}</div>}
                     </div>
                   </div>
                 ))
@@ -485,27 +578,33 @@ export default function Home() {
             <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
                 <button onClick={() => { setActiveChat(null); setActiveUser(null); }} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'transparent', color: '#38bdf8', fontSize: '12px', flexShrink: 0 }}>← Назад</button>
-                <h3 onClick={() => setShowUserProfileModal(true)} style={{ margin: 0, fontSize: '15px', color: '#38bdf8', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {activeUser?.id === session.user.id ? '🔖 Избранное' : `@${activeUser?.username}`}
-                  {activeUser?.status_badge === '👑 Developer' && <span>👑</span>}
-                  {activeUser?.status_badge !== '👑 Developer' && activeUser?.id !== session.user.id && <span>ℹ️</span>}
-                </h3>
+                <div>
+                  <h3 onClick={() => setShowUserProfileModal(true)} style={{ margin: 0, fontSize: '15px', color: '#38bdf8', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {activeUser?.id === session.user.id ? '🔖 Избранное' : `@${activeUser?.username}`}
+                    {activeUser?.status_badge === '👑 Developer' && <span>👑</span>}
+                    {activeUser?.status_badge !== '👑 Developer' && activeUser?.id !== session.user.id && <span>ℹ️</span>}
+                  </h3>
+                  {activeUser?.custom_status && <div style={{ fontSize: '10px', color: '#94a3b8' }}>{activeUser.custom_status}</div>}
+                </div>
               </div>
               <button onClick={deleteChat} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px', flexShrink: 0 }}>🗑️</button>
             </div>
 
-            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Лента сообщений с нормальным скроллом */}
+            <div ref={messagesContainerRef} style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {messages.map((msg) => {
                 const isMe = msg.sender_id === session.user.id;
                 const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const isImage = msg.content.startsWith('[IMAGE]:');
                 const isVoice = msg.content.startsWith('[VOICE]:');
 
+                const msgReactions = reactions.filter(r => r.message_id === msg.id);
+
                 return (
                   <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
                     <div 
                       onClick={() => setSelectedMsgForMenu(msg)}
-                      style={{ background: isMe ? '#2563eb' : '#1e293b', color: '#fff', padding: '10px 14px', borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px', maxWidth: '85%', fontSize: '14px', cursor: 'pointer' }}
+                      style={{ background: isMe ? '#2563eb' : '#1e293b', color: '#fff', padding: '10px 14px', borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px', maxWidth: '85%', fontSize: '14px', cursor: 'pointer', position: 'relative' }}
                     >
                       {isImage ? (
                         <img src={msg.content.replace('[IMAGE]:', '')} alt="Photo" style={{ maxWidth: '100%', borderRadius: '8px', maxHeight: '250px', display: 'block' }} />
@@ -515,6 +614,17 @@ export default function Home() {
                         <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
                       )}
                       
+                      {/* Отрисовка эмодзи-реакций */}
+                      {msgReactions.length > 0 && (
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                          {msgReactions.map(r => (
+                            <span key={r.id} style={{ fontSize: '12px', background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '10px' }}>
+                              {r.emoji}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       <div style={{ fontSize: '10px', color: isMe ? '#93c5fd' : '#94a3b8', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
                         {msg.is_edited && <span style={{ fontStyle: 'italic' }}>изм.</span>}
                         <span>{time}</span>
@@ -524,10 +634,8 @@ export default function Home() {
                   </div>
                 );
               })}
-              <div ref={messagesEndRef} />
             </div>
 
-            {/* Меню ответа / редактирования */}
             {(replyingMsg || editingMsg || forwardingMsg) && (
               <div style={{ padding: '8px 16px', background: '#070a12', borderTop: '1px solid rgba(56, 189, 248, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
                 <span style={{ color: '#38bdf8' }}>
@@ -554,12 +662,31 @@ export default function Home() {
         )}
       </div>
 
-      {/* Контекстное меню сообщения */}
+      {/* Просмотр Истории */}
+      {activeStory && (
+        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 3000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => setActiveStory(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>✖</button>
+          <div style={{ color: '#fff', marginBottom: '10px', fontWeight: 'bold' }}>@{activeStory.profiles?.username}</div>
+          <img src={activeStory.media_url} alt="Story" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '12px' }} />
+        </div>
+      )}
+
+      {/* Меню взаимодействия с сообщением */}
       {selectedMsgForMenu && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '16px' }}>
           <div style={{ width: '100%', maxWidth: '280px', background: '#0b0f19', borderRadius: '16px', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            
+            {/* Панель реакций */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px', background: '#1e293b', borderRadius: '10px' }}>
+              {REACTION_EMOJIS.map(em => (
+                <span key={em} onClick={() => toggleReaction(selectedMsgForMenu.id, em)} style={{ fontSize: '20px', cursor: 'pointer' }}>
+                  {em}
+                </span>
+              ))}
+            </div>
+
             <button onClick={() => { setReplyingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }} style={{ padding: '10px', background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>💬 Ответить</button>
-            <button onClick={() => { setForwardingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); setActiveChat(null); alert('Выберите пользователя, которому переслать сообщение'); }} style={{ padding: '10px', background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>↪ Переслать</button>
+            <button onClick={() => { setForwardingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); setActiveChat(null); alert('Выберите пользователя для пересылки'); }} style={{ padding: '10px', background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>↪ Переслать</button>
             
             {selectedMsgForMenu.sender_id === session.user.id && !selectedMsgForMenu.content.startsWith('[IMAGE]:') && !selectedMsgForMenu.content.startsWith('[VOICE]:') && (
               <button onClick={() => { setEditingMsg(selectedMsgForMenu); setNewMessage(selectedMsgForMenu.content); setSelectedMsgForMenu(null); }} style={{ padding: '10px', background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>✏️ Изменить</button>
@@ -585,9 +712,14 @@ export default function Home() {
               @{activeUser.username}
               {activeUser.status_badge === '👑 Developer' ? '👑' : 'ℹ️'}
             </h3>
-            <p style={{ margin: '0 0 16px 0', fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>
+            <p style={{ margin: '0 0 6px 0', fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>
               {activeUser.status_badge || 'ℹ️ User'}
             </p>
+            {activeUser.custom_status && (
+              <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#e2e8f0', fontStyle: 'italic' }}>
+                «{activeUser.custom_status}»
+              </p>
+            )}
             <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#94a3b8' }}>
               📅 Дата рождения: {activeUser.birthdate || 'Не указана'}
             </p>
