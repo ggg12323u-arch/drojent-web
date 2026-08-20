@@ -496,4 +496,460 @@ export default function Home() {
           width: '100%',
           maxWidth: '380px',
           padding: '32px 24px',
-          ba
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(16px)',
+          borderRadius: '24px',
+          border: '1px solid rgba(56, 189, 248, 0.3)',
+          boxShadow: '0 0 35px rgba(56, 189, 248, 0.2)',
+          color: '#f8fafc'
+        }}>
+          <h2 style={{ margin: '0 0 8px 0', textAlign: 'center', fontSize: '28px', color: '#38bdf8', textShadow: '0 0 12px rgba(56,189,248,0.6)' }}>DroJent</h2>
+          <p style={{ margin: '0 0 24px 0', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>Neon Cyber Glass Messenger</p>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input 
+              style={{ padding: '12px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none' }} 
+              placeholder="Username или Email" 
+              value={loginInput} 
+              onChange={(e) => setLoginInput(e.target.value)} 
+            />
+            <input 
+              style={{ padding: '12px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none' }} 
+              type="password" 
+              placeholder="Пароль" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+            />
+
+            <button disabled={loading} style={{ padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)', color: '#fff', fontWeight: 'bold', boxShadow: '0 0 15px rgba(37,99,235,0.4)', cursor: 'pointer', marginTop: '6px' }} onClick={() => handleAuth('login')}>
+              Войти
+            </button>
+
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '10px 0', paddingTop: '10px' }}>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 8px 0', textAlign: 'center' }}>Нет аккаунта? Зарегистрируйтесь:</p>
+              <input style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', width: '100%', boxSizing: 'border-box', marginBottom: '8px' }} placeholder="Придумайте Username" value={signupUsername} onChange={(e) => setSignupUsername(e.target.value)} />
+              <input style={{ padding: '10px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', width: '100%', boxSizing: 'border-box', marginBottom: '8px' }} placeholder="Ваш Email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} />
+              <button disabled={loading} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #38bdf8', background: 'transparent', color: '#38bdf8', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => handleAuth('signup')}>
+                Зарегистрироваться
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const isDeveloper = session.user.email === DEV_EMAIL;
+  const displayedList = searchQuery.trim() ? searchResults : myChats.map(c => c.profiles);
+
+  return (
+    <div style={{ height: '100vh', width: '100vw', display: 'flex', background: '#030712', fontFamily: 'system-ui, sans-serif', color: '#f8fafc', overflow: 'hidden' }}>
+      
+      {/* Левая панель */}
+      <div style={{
+        width: (activeChat || isSupportMode) ? '320px' : '100%',
+        display: (activeChat || isSupportMode) ? 'none' : 'flex',
+        flexDirection: 'column',
+        borderRight: '1px solid rgba(56, 189, 248, 0.15)',
+        background: 'rgba(11, 15, 25, 0.85)',
+        backdropFilter: 'blur(12px)',
+        height: '100%'
+      }} className="sidebar">
+        
+        <div style={{ padding: '16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '20px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            DroJent {isDeveloper && <Icons.Crown />}
+          </h3>
+          <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px' }}>Выйти</button>
+        </div>
+
+        {/* Панель историй (Stories) */}
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(56, 189, 248, 0.1)', display: 'flex', gap: '12px', overflowX: 'auto', background: 'rgba(7, 10, 18, 0.6)' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px dashed #38bdf8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
+              ➕
+            </div>
+            <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>История</span>
+            <input type="file" accept="image/*" onChange={handleStoryUpload} style={{ display: 'none' }} />
+          </label>
+
+          {stories.map(st => (
+            <div key={st.id} onClick={() => setActiveStory(st)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', padding: '2px', border: '2px solid #38bdf8', boxShadow: '0 0 10px rgba(56,189,248,0.4)', background: '#0b0f19' }}>
+                <img src={st.media_url} alt="St" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              </div>
+              <span style={{ fontSize: '10px', color: '#f1f5f9', marginTop: '4px', maxWidth: '50px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                @{st.profiles?.username}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: 'rgba(7, 10, 18, 0.8)' }}>
+          <button onClick={() => { setActiveTab('chats'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'chats' ? '#38bdf8' : '#64748b', borderBottom: activeTab === 'chats' ? '2px solid #38bdf8' : 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+            💬 Чаты
+          </button>
+          <button onClick={() => { setActiveTab('profile'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'profile' ? '#38bdf8' : '#64748b', borderBottom: activeTab === 'profile' ? '2px solid #38bdf8' : 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+            ⚙️ Профиль
+          </button>
+          {isDeveloper && (
+            <button onClick={() => { setActiveTab('tickets'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'tickets' ? '#38bdf8' : '#64748b', borderBottom: activeTab === 'tickets' ? '2px solid #38bdf8' : 'none', fontWeight: 'bold', cursor: 'pointer' }}>
+              🎫 Тикеты
+            </button>
+          )}
+        </div>
+
+        {activeTab === 'profile' ? (
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto' }}>
+            <div style={{ textAlign: 'center', margin: '10px 0' }}>
+              <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#2563eb', margin: '0 auto 10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: 'bold', border: '2px solid #38bdf8', boxShadow: '0 0 15px rgba(56,189,248,0.4)' }}>
+                {avatarUrl ? <img src={avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (isDeveloper ? <Icons.Crown /> : (myProfile?.username?.[0]?.toUpperCase() || 'U'))}
+              </div>
+              
+              <label style={{ cursor: 'pointer', color: '#38bdf8', fontSize: '12px', fontWeight: 'bold' }}>
+                📷 Изменить аватарку
+                <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+              </label>
+
+              <h3 style={{ margin: '10px 0 2px 0', color: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                @{myProfile?.username || 'user'} {isDeveloper && <Icons.Crown />}
+              </h3>
+              <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>
+                {isDeveloper ? '👑 Developer' : 'ℹ️ User'}
+              </span>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Username:</label>
+              <input style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', boxSizing: 'border-box' }} value={editUsername} onChange={(e) => setEditUsername(e.target.value)} />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Текстовый статус:</label>
+              <input style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', boxSizing: 'border-box' }} placeholder="Например: Занят / Пишу код" value={editCustomStatus} onChange={(e) => setEditCustomStatus(e.target.value)} />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Дата рождения:</label>
+              <input type="date" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', boxSizing: 'border-box' }} value={editBirthdate} onChange={(e) => setEditBirthdate(e.target.value)} />
+            </div>
+
+            <button onClick={saveProfile} style={{ padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)', color: '#fff', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>
+              Сохранить изменения
+            </button>
+          </div>
+        ) : activeTab === 'tickets' ? (
+          /* Панель Тикетов для Разработчика */
+          <div style={{ padding: '16px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <h4 style={{ margin: 0, color: '#38bdf8' }}>Обращения пользователей:</h4>
+            {tickets.length === 0 ? (
+              <div style={{ color: '#64748b', fontSize: '13px' }}>Тикетов пока нет</div>
+            ) : (
+              tickets.map(t => (
+                <div key={t.id} style={{ padding: '12px', borderRadius: '12px', background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                  <div style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>@{t.profiles?.username || 'User'}</div>
+                  <div style={{ fontSize: '14px', margin: '4px 0', color: '#fff' }}>{t.message}</div>
+                  
+                  {t.reply ? (
+                    <div style={{ fontSize: '12px', color: '#10b981', marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
+                      Ответ: {t.reply}
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: '8px', display: 'flex', gap: '6px' }}>
+                      <input 
+                        style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', fontSize: '12px' }}
+                        placeholder="Ответить..."
+                        value={replyTicketText[t.id] || ''}
+                        onChange={(e) => setReplyTicketText({ ...replyTicketText, [t.id]: e.target.value })}
+                      />
+                      <button onClick={() => replyToTicket(t.id)} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: '#38bdf8', color: '#000', fontWeight: 'bold', fontSize: '12px' }}>
+                        Отправить
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <>
+            <div onClick={() => startChatWithUser({ id: session.user.id, username: 'Избранное' })} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', cursor: 'pointer', background: 'rgba(56, 189, 248, 0.05)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#38bdf8', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '18px' }}>🔖</div>
+              <div>
+                <div style={{ fontWeight: '600', fontSize: '14px', color: '#38bdf8' }}>Избранное</div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Заметки и файлы для себя</div>
+              </div>
+            </div>
+
+            <div style={{ padding: '12px', borderBottom: '1px solid rgba(56, 189, 248, 0.1)' }}>
+              <input style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} placeholder="🔍 Поиск по @username..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {displayedList.length === 0 ? (
+                <div style={{ padding: '20px', color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
+                  {searchQuery.trim() ? 'Никто не найден' : 'Найдите пользователя через поиск'}
+                </div>
+              ) : (
+                displayedList.map((u) => u && (
+                  <div key={u.id} onClick={() => startChatWithUser(u)} style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', background: activeUser?.id === u.id ? 'rgba(56, 189, 248, 0.1)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? '#38bdf8' : '#2563eb', color: u.id === session.user.id ? '#000' : '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                      {u.avatar_url ? <img src={u.avatar_url} alt="Av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (u.id === session.user.id ? '🔖' : (u.username?.[0]?.toUpperCase() || 'U'))}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {u.id === session.user.id ? 'Избранное' : `@${u.username || 'user'}`}
+                        {u.status_badge === '👑 Developer' && <Icons.Crown />}
+                        {u.status_badge !== '👑 Developer' && u.id !== session.user.id && <span>ℹ️</span>}
+                      </div>
+                      {u.custom_status && <div style={{ fontSize: '11px', color: '#38bdf8' }}>{u.custom_status}</div>}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Кнопка чата техподдержки */}
+            {!isDeveloper && (
+              <div 
+                onClick={() => { setIsSupportMode(true); setActiveChat(null); }}
+                style={{ padding: '14px 16px', borderTop: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(56, 189, 248, 0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
+              >
+                <Icons.Support />
+                <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#38bdf8' }}>Служба поддержки</span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Правая панель (Поддержка или Чат) */}
+      <div style={{ flex: 1, display: (!activeChat && !isSupportMode) ? 'none' : 'flex', flexDirection: 'column', height: '100%', background: '#030712' }} className="chat-area">
+        
+        {isSupportMode ? (
+          /* Окно Техподдержки для юзера */
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: 'rgba(11, 15, 25, 0.85)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button onClick={() => setIsSupportMode(false)} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'transparent', color: '#38bdf8', fontSize: '12px' }}>
+                <Icons.Back />
+              </button>
+              <h3 style={{ margin: 0, fontSize: '16px', color: '#38bdf8' }}>Служба поддержки DroJent</h3>
+            </div>
+
+            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {mySupportMessages.length === 0 ? (
+                <div style={{ color: '#64748b', textAlign: 'center', margin: 'auto' }}>Напишите свой вопрос или проблему в поддержку</div>
+              ) : (
+                mySupportMessages.map(t => (
+                  <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ alignSelf: 'flex-end', background: '#2563eb', padding: '10px 14px', borderRadius: '16px 16px 2px 16px', maxWidth: '80%', color: '#fff', fontSize: '14px' }}>
+                      {t.message}
+                    </div>
+                    {t.reply && (
+                      <div style={{ alignSelf: 'flex-start', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '10px 14px', borderRadius: '16px 16px 16px 2px', maxWidth: '80%', color: '#38bdf8', fontSize: '14px' }}>
+                        👑 Ответ саппорта: {t.reply}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ padding: '12px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', gap: '8px' }}>
+              <input 
+                style={{ flex: 1, padding: '12px 16px', borderRadius: '24px', border: '1px solid rgba(56, 189, 248, 0.2)', background: '#030712', color: '#fff', outline: 'none' }}
+                placeholder="Опишите проблему..."
+                value={newSupportMsg}
+                onChange={(e) => setNewSupportMsg(e.target.value)}
+              />
+              <button onClick={sendSupportTicket} style={{ padding: '12px 20px', borderRadius: '24px', border: 'none', background: '#38bdf8', color: '#000', fontWeight: 'bold' }}>
+                <Icons.Send />
+              </button>
+            </div>
+          </div>
+        ) : activeChat ? (
+          /* Окно Обычного Чата */
+          <>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: 'rgba(11, 15, 25, 0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                <button onClick={() => { setActiveChat(null); setActiveUser(null); }} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'transparent', color: '#38bdf8', fontSize: '12px', flexShrink: 0 }}>
+                  <Icons.Back />
+                </button>
+                <div>
+                  <h3 onClick={() => setShowUserProfileModal(true)} style={{ margin: 0, fontSize: '15px', color: '#38bdf8', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {activeUser?.id === session.user.id ? '🔖 Избранное' : `@${activeUser?.username}`}
+                    {activeUser?.status_badge === '👑 Developer' && <Icons.Crown />}
+                    {activeUser?.status_badge !== '👑 Developer' && activeUser?.id !== session.user.id && <span>ℹ️</span>}
+                  </h3>
+                  {activeUser?.custom_status && <div style={{ fontSize: '10px', color: '#94a3b8' }}>{activeUser.custom_status}</div>}
+                </div>
+              </div>
+              <button onClick={deleteChat} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px', flexShrink: 0 }}>
+                <Icons.Trash />
+              </button>
+            </div>
+
+            {/* Лента сообщений */}
+            <div ref={messagesContainerRef} style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {messages.map((msg) => {
+                const isMe = msg.sender_id === session.user.id;
+                const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isImage = msg.content.startsWith('[IMAGE]:');
+                const isVoice = msg.content.startsWith('[VOICE]:');
+                const msgReactions = reactions.filter(r => r.message_id === msg.id);
+
+                return (
+                  <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+                    <div 
+                      onClick={() => setSelectedMsgForMenu(msg)}
+                      style={{
+                        background: isMe ? 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)' : 'rgba(30, 41, 59, 0.7)',
+                        backdropFilter: 'blur(8px)',
+                        color: '#fff',
+                        padding: '12px 16px',
+                        borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                        maxWidth: '85%',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        boxShadow: isMe ? '0 0 15px rgba(37,99,235,0.3)' : '0 0 10px rgba(0,0,0,0.3)',
+                        border: isMe ? 'none' : '1px solid rgba(255,255,255,0.08)'
+                      }}
+                    >
+                      {isImage ? (
+                        <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
+                          <img src={msg.content.replace('[IMAGE]:', '')} alt="Photo" style={{ maxWidth: '100%', maxHeight: '250px', display: 'block' }} />
+                        </div>
+                      ) : isVoice ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px' }}>
+                          <span style={{ fontSize: '18px' }}>🎙️</span>
+                          <audio controls src={msg.content.replace('[VOICE]:', '')} style={{ maxWidth: '200px', filter: 'invert(1)' }} />
+                        </div>
+                      ) : (
+                        <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                      )}
+                      
+                      {msgReactions.length > 0 && (
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                          {msgReactions.map(r => (
+                            <span key={r.id} style={{ fontSize: '11px', background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                              {r.emoji}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{ fontSize: '10px', color: isMe ? '#93c5fd' : '#94a3b8', marginTop: '4px', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+                        {msg.is_edited && <span style={{ fontStyle: 'italic' }}>изм.</span>}
+                        <span>{time}</span>
+                        {isMe && <span style={{ fontWeight: 'bold' }}>{msg.is_read ? '✓✓' : '✓'}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {(replyingMsg || editingMsg || forwardingMsg) && (
+              <div style={{ padding: '8px 16px', background: '#070a12', borderTop: '1px solid rgba(56, 189, 248, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                <span style={{ color: '#38bdf8' }}>
+                  {editingMsg ? '✏️ Редактирование...' : replyingMsg ? `💬 Ответ на: "${replyingMsg.content.slice(0, 20)}..."` : '↪ Пересылка сообщения...'}
+                </span>
+                <button onClick={() => { setEditingMsg(null); setReplyingMsg(null); setForwardingMsg(null); setNewMessage(''); }} style={{ border: 'none', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>✖</button>
+              </div>
+            )}
+
+            <form onSubmit={(e) => { e.preventDefault(); sendMessage('text'); }} style={{ padding: '12px 10px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <label style={{ cursor: 'pointer', padding: '10px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icons.Camera />
+                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+              </label>
+
+              <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '10px', background: isRecording ? 'rgba(239, 68, 68, 0.2)' : 'rgba(30, 41, 59, 0.8)', border: 'none', borderRadius: '50%', cursor: 'pointer' }}>
+                {isRecording ? <Icons.Stop /> : <Icons.Mic />}
+              </button>
+
+              <input style={{ flex: 1, minWidth: 0, padding: '12px 16px', borderRadius: '24px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', fontSize: '14px' }} placeholder={isRecording ? "Идет запись..." : "Сообщение..."} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} disabled={isRecording} />
+              <button type="submit" style={{ padding: '12px 18px', borderRadius: '24px', border: 'none', background: 'linear-gradient(135deg, #38bdf8 0%, #2563eb 100%)', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
+                <Icons.Send />
+              </button>
+            </form>
+          </>
+        ) : null}
+      </div>
+
+      {/* Просмотр Истории */}
+      {activeStory && (
+        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 3000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => setActiveStory(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>✖</button>
+          <div style={{ color: '#fff', marginBottom: '10px', fontWeight: 'bold' }}>@{activeStory.profiles?.username}</div>
+          <img src={activeStory.media_url} alt="Story" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '12px' }} />
+        </div>
+      )}
+
+      {/* Меню взаимодействия с сообщением */}
+      {selectedMsgForMenu && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '16px' }}>
+          <div style={{ width: '100%', maxWidth: '280px', background: '#0b0f19', borderRadius: '20px', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '12px' }}>
+              {REACTION_EMOJIS.map(em => (
+                <span key={em} onClick={() => toggleReaction(selectedMsgForMenu.id, em)} style={{ fontSize: '20px', cursor: 'pointer' }}>
+                  {em}
+                </span>
+              ))}
+            </div>
+
+            <button onClick={() => { setReplyingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }} style={{ padding: '10px', background: 'rgba(30, 41, 59, 0.6)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>💬 Ответить</button>
+            <button onClick={() => { setForwardingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); setActiveChat(null); alert('Выберите пользователя для пересылки'); }} style={{ padding: '10px', background: 'rgba(30, 41, 59, 0.6)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>↪ Переслать</button>
+            
+            {selectedMsgForMenu.sender_id === session.user.id && !selectedMsgForMenu.content.startsWith('[IMAGE]:') && !selectedMsgForMenu.content.startsWith('[VOICE]:') && (
+              <button onClick={() => { setEditingMsg(selectedMsgForMenu); setNewMessage(selectedMsgForMenu.content); setSelectedMsgForMenu(null); }} style={{ padding: '10px', background: 'rgba(30, 41, 59, 0.6)', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>✏️ Изменить</button>
+            )}
+
+            {selectedMsgForMenu.sender_id === session.user.id && (
+              <button onClick={() => deleteMessage(selectedMsgForMenu.id)} style={{ padding: '10px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #f87171', borderRadius: '8px', color: '#f87171', cursor: 'pointer', textAlign: 'left' }}>🗑️ Удалить</button>
+            )}
+
+            <button onClick={() => setSelectedMsgForMenu(null)} style={{ padding: '10px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', marginTop: '4px' }}>Отмена</button>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка профиля собеседника */}
+      {showUserProfileModal && activeUser && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
+          <div style={{ width: '100%', maxWidth: '320px', background: '#0b0f19', borderRadius: '20px', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '20px', textAlign: 'center', color: '#fff' }}>
+            <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#2563eb', margin: '0 auto 10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>
+              {activeUser.avatar_url ? <img src={activeUser.avatar_url} alt="Av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (activeUser.username?.[0]?.toUpperCase() || 'U')}
+            </div>
+            <h3 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+              @{activeUser.username}
+              {activeUser.status_badge === '👑 Developer' && <Icons.Crown />}
+            </h3>
+            <p style={{ margin: '0 0 6px 0', fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>
+              {activeUser.status_badge || 'ℹ️ User'}
+            </p>
+            {activeUser.custom_status && (
+              <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#e2e8f0', fontStyle: 'italic' }}>
+                «{activeUser.custom_status}»
+              </p>
+            )}
+            <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#94a3b8' }}>
+              📅 Дата рождения: {activeUser.birthdate || 'Не указана'}
+            </p>
+            <button onClick={() => setShowUserProfileModal(false)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: '#38bdf8', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`
+        @media (min-width: 640px) {
+          .sidebar { display: flex !important; width: 320px !important; }
+          .chat-area { display: flex !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
