@@ -47,7 +47,10 @@ const Icons = {
   Trash: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
   Support: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
   Pin: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-6H6.5L5 17z"/><path d="M9 11V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7"/></svg>,
-  Crown: () => <span style={{ filter: 'drop-shadow(0 0 6px #f59e0b)' }}>👑</span>
+  Crown: () => <span style={{ filter: 'drop-shadow(0 0 6px #f59e0b)' }}>👑</span>,
+  // Новые иконки статуса доставки: круг = отправлено, круг с точкой = прочитано
+  Sent: ({ color = 'currentColor' }) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="12" cy="12" r="9"/></svg>,
+  Read: ({ color = 'currentColor' }) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill={color}/></svg>
 };
 
 export default function Home() {
@@ -58,7 +61,7 @@ export default function Home() {
   const [signupEmail, setSignupEmail] = useState('');
 
   const [myProfile, setMyProfile] = useState(null);
-  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'profile' | 'tickets'
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'profile' | 'tickets' | 'users'
   const [themeKey, setThemeKey] = useState('blue'); // 'blue' | 'green' | 'purple'
   const theme = THEMES[themeKey];
 
@@ -76,10 +79,13 @@ export default function Home() {
   const [activeChatData, setActiveChatData] = useState(null);
   const [pinnedMsgData, setPinnedMsgData] = useState(null);
   const [activeUser, setActiveUser] = useState(null);
+  const [myChatRole, setMyChatRole] = useState(null);
+  const [subscriberCount, setSubscriberCount] = useState(0);
 
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [showCreateCommunityModal, setShowCreateCommunityModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [previewChat, setPreviewChat] = useState(null); // предпросмотр канала перед подпиской
 
   const [communityType, setCommunityType] = useState('group');
   const [communityName, setCommunityName] = useState('');
@@ -118,6 +124,16 @@ export default function Home() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const messagesContainerRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+
+  // Кастомные эмодзи чата
+  const [customEmojis, setCustomEmojis] = useState([]);
+
+  // Админ-панель разработчика: список пользователей
+  const [allUsers, setAllUsers] = useState([]);
+
+  // Печатает / онлайн
+  const [typingUsers, setTypingUsers] = useState([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -144,9 +160,13 @@ export default function Home() {
     }
   };
 
+  // Только истории контактов (+ свои)
   const fetchStories = async () => {
+    if (!session) return;
+    const { data: contactRows } = await supabase.from('contacts').select('contact_id').eq('owner_id', session.user.id);
+    const allowedIds = [session.user.id, ...((contactRows || []).map(c => c.contact_id))];
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data } = await supabase.from('stories').select('*, profiles(username, avatar_url)').gte('created_at', yesterday).order('created_at', { ascending: false });
+    const { data } = await supabase.from('stories').select('*, profiles(username, avatar_url)').gte('created_at', yesterday).in('user_id', allowedIds).order('created_at', { ascending: false });
     if (data) setStories(data);
   };
 
@@ -161,14 +181,25 @@ export default function Home() {
     }
   };
 
+  const fetchAllUsers = async () => {
+    if (!session || session.user.email !== DEV_EMAIL) return;
+    const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    if (data) setAllUsers(data);
+  };
+
+  const toggleBanUser = async (u) => {
+    await supabase.from('profiles').update({ is_banned: !u.is_banned }).eq('id', u.id);
+    fetchAllUsers();
+  };
+
   const fetchMyChats = async () => {
     if (!session) return;
     const { data: parts } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
     if (parts && parts.length > 0) {
       const chatIds = parts.map(p => p.chat_id);
       const { data: chatsData } = await supabase.from('chats').select('*').in('id', chatIds);
-      const { data: allParts } = await supabase.from('chat_participants').select('chat_id, user_id, profiles(id, username, full_name, avatar_url, status_badge, custom_status)').in('chat_id', chatIds);
-      
+      const { data: allParts } = await supabase.from('chat_participants').select('chat_id, user_id, profiles(id, username, full_name, avatar_url, status_badge, custom_status, is_online)').in('chat_id', chatIds);
+
       if (chatsData) {
         const formatted = chatsData.map(c => {
           if (c.type === 'group' || c.type === 'channel') return { chat_id: c.id, isGroupOrChannel: true, chatDetails: c };
@@ -188,7 +219,33 @@ export default function Home() {
       fetchStories();
       fetchSupportTickets();
       fetchMyChats();
+      fetchAllUsers();
     }
+  }, [session]);
+
+  // Глобальная realtime-подписка — обновляет список чатов, истории и т.д. без перезагрузки страницы
+  useEffect(() => {
+    if (!session) return;
+    const globalChan = supabase.channel('global_updates_' + session.user.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => fetchMyChats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_participants' }, () => fetchMyChats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => fetchMyChats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stories' }, () => fetchStories())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => fetchMyChats())
+      .subscribe();
+    return () => { supabase.removeChannel(globalChan); };
+  }, [session]);
+
+  // Онлайн-статус: heartbeat пока страница открыта
+  useEffect(() => {
+    if (!session) return;
+    const goOnline = () => supabase.from('profiles').update({ is_online: true, last_seen: new Date().toISOString() }).eq('id', session.user.id);
+    const goOffline = () => supabase.from('profiles').update({ is_online: false, last_seen: new Date().toISOString() }).eq('id', session.user.id);
+    goOnline();
+    const iv = setInterval(goOnline, 25000);
+    window.addEventListener('beforeunload', goOffline);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) goOffline(); else goOnline(); });
+    return () => { clearInterval(iv); window.removeEventListener('beforeunload', goOffline); goOffline(); };
   }, [session]);
 
   useEffect(() => {
@@ -205,7 +262,7 @@ export default function Home() {
   }, [searchQuery, session]);
 
   useEffect(() => {
-    if (!activeChat) { setMessages([]); setReactions([]); setActiveChatData(null); setPinnedMsgData(null); return; }
+    if (!activeChat) { setMessages([]); setReactions([]); setActiveChatData(null); setPinnedMsgData(null); setMyChatRole(null); setSubscriberCount(0); setCustomEmojis([]); return; }
     const loadChat = async () => {
       const { data: chat } = await supabase.from('chats').select('*').eq('id', activeChat).single();
       if (chat) {
@@ -217,14 +274,24 @@ export default function Home() {
         } else {
           setPinnedMsgData(null);
         }
+        if (chat.type === 'channel' || chat.type === 'group') {
+          const { count } = await supabase.from('chat_participants').select('*', { count: 'exact', head: true }).eq('chat_id', activeChat);
+          setSubscriberCount(count || 0);
+        }
       }
+      const { data: role } = await supabase.from('chat_participants').select('role').eq('chat_id', activeChat).eq('user_id', session.user.id).single();
+      setMyChatRole(role?.role || 'member');
+
       const { data: msgs } = await supabase.from('messages').select('*').eq('chat_id', activeChat).order('created_at', { ascending: true });
-      if (msgs) { 
-        setMessages(msgs); 
-        setTimeout(scrollToBottom, 150); 
+      if (msgs) {
+        setMessages(msgs);
+        setTimeout(scrollToBottom, 150);
         const { data: r } = await supabase.from('message_reactions').select('*').in('message_id', msgs.map(m => m.id));
         if (r) setReactions(r);
       }
+      const { data: emj } = await supabase.from('custom_emojis').select('*').eq('chat_id', activeChat);
+      if (emj) setCustomEmojis(emj);
+
       await supabase.from('messages').update({ is_read: true }).eq('chat_id', activeChat).neq('sender_id', session.user.id);
     };
     loadChat();
@@ -232,9 +299,36 @@ export default function Home() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${activeChat}` }, loadChat)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, loadChat)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `id=eq.${activeChat}` }, loadChat)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_participants', filter: `chat_id=eq.${activeChat}` }, loadChat)
       .subscribe();
     return () => { supabase.removeChannel(chan); };
   }, [activeChat, session]);
+
+  // Статус "печатает"
+  useEffect(() => {
+    if (!activeChat || !session) { setTypingUsers([]); return; }
+    const loadTyping = async () => {
+      const cutoff = new Date(Date.now() - 4000).toISOString();
+      const { data } = await supabase.from('typing_status').select('user_id, profiles(username)').eq('chat_id', activeChat).gt('updated_at', cutoff).neq('user_id', session.user.id);
+      setTypingUsers(data || []);
+    };
+    loadTyping();
+    const chan = supabase.channel(`typing_${activeChat}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'typing_status', filter: `chat_id=eq.${activeChat}` }, loadTyping)
+      .subscribe();
+    const iv = setInterval(loadTyping, 2500);
+    return () => { supabase.removeChannel(chan); clearInterval(iv); };
+  }, [activeChat, session]);
+
+  const handleTyping = (val) => {
+    setNewMessage(val);
+    if (!activeChat || !session) return;
+    supabase.from('typing_status').upsert({ chat_id: activeChat, user_id: session.user.id, updated_at: new Date().toISOString() });
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      supabase.from('typing_status').delete().eq('chat_id', activeChat).eq('user_id', session.user.id);
+    }, 3000);
+  };
 
   // Загрузка комментариев
   useEffect(() => {
@@ -278,21 +372,51 @@ export default function Home() {
 
   const pinMessage = async (msgId) => {
     await supabase.from('chats').update({ pinned_message_id: msgId }).eq('id', activeChat);
-    alert('Сообщение закреплено!');
     setSelectedMsgForMenu(null);
+  };
+
+  // Открепление сообщения
+  const unpinMessage = async () => {
+    await supabase.from('chats').update({ pinned_message_id: null }).eq('id', activeChat);
+    setPinnedMsgData(null);
   };
 
   const addMemberToComm = async () => {
     const { data: u } = await supabase.from('profiles').select('id').eq('username', newMemberName).single();
     if (!u) { alert('Пользователь не найден'); return; }
-    await supabase.from('chat_participants').insert({ chat_id: activeChat, user_id: u.id });
+    await supabase.from('chat_participants').insert({ chat_id: activeChat, user_id: u.id, role: 'member' });
     setNewMemberName(''); alert('Добавлен!');
+  };
+
+  const promoteToAdmin = async (username) => {
+    const { data: u } = await supabase.from('profiles').select('id').eq('username', username).single();
+    if (!u) { alert('Пользователь не найден'); return; }
+    await supabase.from('chat_participants').update({ role: 'admin' }).eq('chat_id', activeChat).eq('user_id', u.id);
+    alert('Назначен админом чата');
   };
 
   const joinCommunity = async (comm) => {
     const { data: ex } = await supabase.from('chat_participants').select('id').eq('chat_id', comm.id).eq('user_id', session.user.id);
-    if (!ex || ex.length === 0) await supabase.from('chat_participants').insert([{ chat_id: comm.id, user_id: session.user.id }]);
+    if (!ex || ex.length === 0) await supabase.from('chat_participants').insert([{ chat_id: comm.id, user_id: session.user.id, role: 'member' }]);
     setActiveChat(comm.id); setActiveUser(null); setSearchQuery(''); fetchMyChats();
+  };
+
+  // Клик по каналу/группе в поиске: канал сначала показывает предпросмотр с кнопкой "Подписаться"
+  const openChannelOrGroup = async (c) => {
+    const { data: ex } = await supabase.from('chat_participants').select('id').eq('chat_id', c.id).eq('user_id', session.user.id);
+    const isSub = ex && ex.length > 0;
+    if (c.type === 'channel' && !isSub) {
+      const { count } = await supabase.from('chat_participants').select('*', { count: 'exact', head: true }).eq('chat_id', c.id);
+      setPreviewChat({ ...c, subscriberCount: count || 0 });
+      return;
+    }
+    joinCommunity(c);
+  };
+
+  const subscribeToPreviewChannel = async () => {
+    if (!previewChat) return;
+    await joinCommunity(previewChat);
+    setPreviewChat(null);
   };
 
   const startChatWithUser = async (targetUser) => {
@@ -300,6 +424,15 @@ export default function Home() {
     const isSaved = targetUser.id === session.user.id;
     const { data: myP } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
     const myChatIds = myP?.map(c => c.chat_id) || [];
+
+    // Автоматически добавляем друг друга в контакты (нужно для видимости историй)
+    if (!isSaved) {
+      const { data: existingContact } = await supabase.from('contacts').select('id').eq('owner_id', session.user.id).eq('contact_id', targetUser.id);
+      if (!existingContact || existingContact.length === 0) {
+        await supabase.from('contacts').insert([{ owner_id: session.user.id, contact_id: targetUser.id }]);
+        await supabase.from('contacts').insert([{ owner_id: targetUser.id, contact_id: session.user.id }]);
+      }
+    }
 
     if (myChatIds.length > 0) {
       if (isSaved) {
@@ -333,15 +466,32 @@ export default function Home() {
     const finalContent = replyingMsg ? `💬 [Ответ]\n${txt}` : txt;
     setReplyingMsg(null);
     await supabase.from('messages').insert([{ chat_id: activeChat, sender_id: session.user.id, content: finalContent }]);
+    clearTimeout(typingTimeoutRef.current);
+    supabase.from('typing_status').delete().eq('chat_id', activeChat).eq('user_id', session.user.id);
+  };
+
+  // Права: в группах/каналах удалять чужие сообщения может только владелец/админ чата; свои — всегда
+  const isChatAdmin = activeChatData?.owner_id === session.user.id || myChatRole === 'admin';
+
+  const canDeleteMessage = (msg) => {
+    if (msg.sender_id === session.user.id) return true;
+    if (activeChatData?.type === 'group' || activeChatData?.type === 'channel') return isChatAdmin;
+    return false;
   };
 
   const deleteMessage = async (msgId) => {
+    const msg = messages.find(m => m.id === msgId);
+    if (msg && !canDeleteMessage(msg)) { alert('Удалять чужие сообщения может только админ.'); return; }
     await supabase.from('messages').delete().eq('id', msgId);
     setMessages(prev => prev.filter(m => m.id !== msgId));
     setSelectedMsgForMenu(null);
   };
 
   const deleteChat = async () => {
+    if ((activeChatData?.type === 'group' || activeChatData?.type === 'channel') && !isChatAdmin) {
+      alert('Удалить этот чат может только админ.');
+      return;
+    }
     if (confirm('Удалить этот чат?')) {
       await supabase.from('chats').delete().eq('id', activeChat);
       setActiveChat(null); setActiveUser(null); fetchMyChats();
@@ -358,15 +508,30 @@ export default function Home() {
   const handleMediaUpload = async (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
-    const name = `${type}_${Date.now()}.${file.name.split('.').pop()}`;
-    const { error } = await supabase.storage.from('media').upload(name, file);
-    if (!error) {
-      const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(name);
-      if (type === 'story') { await supabase.from('stories').insert([{ user_id: session.user.id, media_url: publicUrl }]); fetchStories(); }
-      else if (type === 'avatar') setAvatarUrl(publicUrl);
-      else if (type === 'comm_avatar') setCommunityAvatar(publicUrl);
-      else sendMessage('image', `[IMAGE]:${publicUrl}`);
+    const safeExt = (file.name.split('.').pop() || 'bin').toLowerCase();
+    const name = `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+    const { error } = await supabase.storage.from('media').upload(name, file, {
+      contentType: file.type || 'application/octet-stream',
+      cacheControl: '3600',
+      upsert: true
+    });
+    if (error) {
+      // Раньше ошибка молча проглатывалась — поэтому казалось, что "фотки не отправляются"
+      alert('Не удалось загрузить файл: ' + error.message + '\nПроверьте, что бакет "media" в Supabase Storage публичный и есть policy на insert для authenticated.');
+      e.target.value = '';
+      return;
     }
+    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(name);
+    if (type === 'story') { await supabase.from('stories').insert([{ user_id: session.user.id, media_url: publicUrl }]); fetchStories(); }
+    else if (type === 'avatar') setAvatarUrl(publicUrl);
+    else if (type === 'comm_avatar') setCommunityAvatar(publicUrl);
+    else if (type === 'emoji') {
+      await supabase.from('custom_emojis').insert([{ chat_id: activeChat, name: file.name.split('.')[0], image_url: publicUrl, created_by: session.user.id }]);
+      const { data: emj } = await supabase.from('custom_emojis').select('*').eq('chat_id', activeChat);
+      if (emj) setCustomEmojis(emj);
+    }
+    else await sendMessage('image', `[IMAGE]:${publicUrl}`);
+    e.target.value = '';
   };
 
   const startRecording = async () => {
@@ -378,10 +543,12 @@ export default function Home() {
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const name = `voice_${Date.now()}.webm`;
-        const { error } = await supabase.storage.from('media').upload(name, audioBlob);
+        const { error } = await supabase.storage.from('media').upload(name, audioBlob, { contentType: 'audio/webm', upsert: true });
         if (!error) {
           const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(name);
           sendMessage('voice', `[VOICE]:${publicUrl}`);
+        } else {
+          alert('Не удалось загрузить голосовое: ' + error.message);
         }
       };
       mediaRecorderRef.current.start(); setIsRecording(true);
@@ -415,7 +582,15 @@ export default function Home() {
         if (p) { const { data: em } = await supabase.rpc('get_email_by_id', { user_id: p.id }); if (em) targetEmail = em; }
       }
       const { error } = await supabase.auth.signInWithPassword({ email: targetEmail, password });
-      if (error) alert('Ошибка: ' + error.message);
+      if (error) { alert('Ошибка: ' + error.message); setLoading(false); return; }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: prof } = await supabase.from('profiles').select('is_banned').eq('id', user.id).single();
+        if (prof?.is_banned) {
+          await supabase.auth.signOut();
+          alert('Ваш аккаунт заблокирован.');
+        }
+      }
     }
     setLoading(false);
   };
@@ -445,7 +620,6 @@ export default function Home() {
 
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', background: '#030712', fontFamily: 'system-ui, sans-serif', color: '#f8fafc', overflow: 'hidden' }}>
-      
       {/* SIDEBAR */}
       <div style={{ width: (activeChat || isSupportMode) ? '320px' : '100%', display: (activeChat || isSupportMode) ? 'none' : 'flex', flexDirection: 'column', borderRight: `1px solid ${theme.border}`, background: 'rgba(11, 15, 25, 0.85)', backdropFilter: 'blur(16px)', height: '100%' }}>
         <div style={{ padding: '16px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -453,7 +627,7 @@ export default function Home() {
           <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px', cursor: 'pointer' }}>Выйти</button>
         </div>
 
-        {/* Stories */}
+        {/* Stories — теперь только контакты (+ свои) */}
         <div style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, display: 'flex', gap: '12px', overflowX: 'auto', background: 'rgba(7, 10, 18, 0.6)' }}>
           <label style={{ cursor: 'pointer', flexShrink: 0, textAlign: 'center' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: `2px dashed ${theme.primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.primary }}>➕</div>
@@ -473,6 +647,7 @@ export default function Home() {
           <button onClick={() => { setActiveTab('chats'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'chats' ? theme.primary : '#64748b', borderBottom: activeTab === 'chats' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Чаты</button>
           <button onClick={() => { setActiveTab('profile'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'profile' ? theme.primary : '#64748b', borderBottom: activeTab === 'profile' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Профиль</button>
           {isDeveloper && <button onClick={() => { setActiveTab('tickets'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'tickets' ? theme.primary : '#64748b', borderBottom: activeTab === 'tickets' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Тикеты</button>}
+          {isDeveloper && <button onClick={() => { setActiveTab('users'); setIsSupportMode(false); fetchAllUsers(); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'users' ? theme.primary : '#64748b', borderBottom: activeTab === 'users' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Юзеры</button>}
         </div>
 
         {activeTab === 'profile' ? (
@@ -483,8 +658,6 @@ export default function Home() {
               </div>
               <label style={{ color: theme.primary, fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>Изменить аватар<input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'avatar')} style={{ display: 'none' }}/></label>
             </div>
-
-            {/* Выбор Неоновой Темы */}
             <div style={{ background: 'rgba(3, 7, 18, 0.6)', padding: '12px', borderRadius: '12px', border: `1px solid ${theme.border}` }}>
               <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Тема оформления:</label>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -493,7 +666,6 @@ export default function Home() {
                 <button onClick={() => setThemeKey('purple')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#9333ea', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>Фиолетовый</button>
               </div>
             </div>
-
             <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Имя (Full Name)" value={editFullName} onChange={e => setEditFullName(e.target.value)} />
             <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Username" value={editUsername} onChange={e => setEditUsername(e.target.value)} />
             <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Статус" value={editCustomStatus} onChange={e => setEditCustomStatus(e.target.value)} />
@@ -514,6 +686,23 @@ export default function Home() {
               </div>
             ))}
           </div>
+        ) : activeTab === 'users' ? (
+          <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
+            {allUsers.map(u => (
+              <div key={u.id} style={{ padding: '12px', background: 'rgba(30,41,59,0.6)', borderRadius: '12px', marginBottom: '10px', border: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', background: '#2563eb', flexShrink: 0 }}>
+                  {u.avatar_url && <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="av"/>}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: '#fff', fontWeight: '600', fontSize: '13px' }}>{u.full_name || u.username} {u.is_online && <span style={{ color: '#22c55e' }}>●</span>}</div>
+                  <div style={{ color: '#94a3b8', fontSize: '11px' }}>@{u.username} {u.is_banned && <span style={{ color: '#f87171' }}>· забанен</span>}</div>
+                </div>
+                <button onClick={() => toggleBanUser(u)} style={{ padding: '6px 10px', borderRadius: '8px', border: `1px solid ${u.is_banned ? '#22c55e' : '#f87171'}`, background: 'transparent', color: u.is_banned ? '#22c55e' : '#f87171', fontSize: '11px', cursor: 'pointer', flexShrink: 0 }}>
+                  {u.is_banned ? 'Разбанить' : 'Забанить'}
+                </button>
+              </div>
+            ))}
+          </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <button onClick={() => setShowCreateCommunityModal(true)} style={{ margin: '10px', padding: '10px', border: `1px solid ${theme.primary}`, background: 'rgba(56,189,248,0.1)', color: theme.primary, borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>➕ Создать Группу / Канал</button>
@@ -524,7 +713,7 @@ export default function Home() {
                 const u = item.profiles || (!item.isGroupOrChannel ? item : null);
                 if (c?.type === 'group' || c?.type === 'channel') {
                   return (
-                    <div key={i} onClick={() => joinCommunity(c)} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: activeChat === c.id ? 'rgba(255,255,255,0.05)' : 'transparent' }}>
+                    <div key={i} onClick={() => openChannelOrGroup(c)} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: activeChat === c.id ? 'rgba(255,255,255,0.05)' : 'transparent' }}>
                       <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: c.type==='channel' ? '#8b5cf6' : '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                         {c.avatar_url ? <img src={c.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="comm"/> : (c.type==='channel'?'📢':'👥')}
                       </div>
@@ -538,8 +727,9 @@ export default function Home() {
                 if (u) {
                   return (
                     <div key={i} onClick={() => startChatWithUser(u)} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: activeUser?.id === u.id ? 'rgba(255,255,255,0.05)' : 'transparent' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? theme.primary : '#2563eb', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                         {u.avatar_url ? <img src={u.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="av"/> : 'U'}
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? theme.primary : '#2563eb', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                        {u.avatar_url ? <img src={u.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="av"/> : 'U'}
+                        {u.is_online && <span style={{ position: 'absolute', bottom: 0, right: 0, width: '10px', height: '10px', borderRadius: '50%', background: '#22c55e', border: '2px solid #0b0f19' }} />}
                       </div>
                       <div>
                         <div style={{ color: '#fff', display: 'flex', gap: '5px', fontWeight: '600' }}>
@@ -589,22 +779,34 @@ export default function Home() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <button onClick={() => { setActiveChat(null); setActiveUser(null); }} style={{ background: 'transparent', border: 'none', color: theme.primary, cursor: 'pointer' }}><Icons.Back /></button>
                 <div>
-                  <h3 onClick={() => { if(activeChatData?.owner_id === session.user.id) setShowAdminModal(true); else if(activeUser) setShowUserProfileModal(true); }} style={{ margin: 0, color: theme.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <h3 onClick={() => { if(isChatAdmin) setShowAdminModal(true); else if(activeUser) setShowUserProfileModal(true); }} style={{ margin: 0, color: theme.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
                     {activeChatData?.type === 'group' ? `👥 ${activeChatData.name}` : activeChatData?.type === 'channel' ? `📢 ${activeChatData.name}` : (activeUser?.id === session.user.id ? '🔖 Избранное' : activeUser?.full_name || activeUser?.username)}
                     {activeChatData?.is_verified && '✅'}
                     {activeUser?.status_badge === '👑 Developer' && <Icons.Crown />}
                   </h3>
+                  {(activeChatData?.type === 'group' || activeChatData?.type === 'channel') && (
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{subscriberCount} {activeChatData?.type === 'channel' ? 'подписчиков' : 'участников'}</div>
+                  )}
+                  {typingUsers.length > 0 && (
+                    <div style={{ fontSize: '11px', color: theme.primary }}>{typingUsers.map(t => t.profiles?.username).join(', ')} печатает...</div>
+                  )}
+                  {activeChatData?.type === 'dm' && activeUser && activeUser.id !== session.user.id && typingUsers.length === 0 && (
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{activeUser.is_online ? 'в сети' : 'не в сети'}</div>
+                  )}
                 </div>
               </div>
-              <button onClick={deleteChat} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><Icons.Trash /></button>
+              {(activeChatData?.type === 'dm' || isChatAdmin) && (
+                <button onClick={deleteChat} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><Icons.Trash /></button>
+              )}
             </div>
 
-            {/* Закреплённое сообщение */}
+            {/* Закреплённое сообщение — теперь можно открепить */}
             {pinnedMsgData && (
               <div style={{ padding: '8px 16px', background: 'rgba(56, 189, 248, 0.1)', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: theme.primary }}>
                 <Icons.Pin />
                 <span style={{ fontWeight: 'bold' }}>Закреплено:</span>
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, color: '#fff' }}>{pinnedMsgData.content}</span>
+                <button onClick={unpinMessage} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '13px' }}>✖</button>
               </div>
             )}
 
@@ -616,10 +818,19 @@ export default function Home() {
                   <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
                     <div onClick={() => setSelectedMsgForMenu(msg)} style={{ background: isMe ? theme.gradient : 'rgba(30, 41, 59, 0.75)', padding: '10px 14px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', color: '#fff', cursor: 'pointer', border: isMe ? 'none' : `1px solid ${theme.border}` }}>
                       {msg.content.startsWith('[IMAGE]:') ? <img src={msg.content.replace('[IMAGE]:','')} style={{maxWidth:'100%', borderRadius:'8px'}} alt="media"/> : msg.content.startsWith('[VOICE]:') ? <audio controls src={msg.content.replace('[VOICE]:','')} /> : msg.content}
-                      {rcts.length > 0 && <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>{rcts.map(r => <span key={r.id}>{r.emoji}</span>)}</div>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                        {rcts.length > 0 && (
+                          <div style={{ display: 'flex', gap: '5px' }}>
+                            {rcts.map(r => r.emoji.startsWith('http') ? <img key={r.id} src={r.emoji} alt="emoji" style={{ width: '16px', height: '16px' }}/> : <span key={r.id}>{r.emoji}</span>)}
+                          </div>
+                        )}
+                        {isMe && (
+                          <span style={{ marginLeft: 'auto', opacity: 0.8 }}>
+                            {msg.is_read ? <Icons.Read /> : <Icons.Sent />}
+                          </span>
+                        )}
+                      </div>
                     </div>
-
-                    {/* Комментарии под постом в канале */}
                     {activeChatData?.type === 'channel' && (
                       <button onClick={() => setOpenCommentsForMsg(msg)} style={{ marginTop: '4px', background: 'transparent', border: 'none', color: theme.primary, fontSize: '11px', cursor: 'pointer' }}>
                         💬 Комментарии
@@ -636,13 +847,29 @@ export default function Home() {
               <form onSubmit={e => { e.preventDefault(); sendMessage(); }} style={{ padding: '10px', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0, borderTop: `1px solid ${theme.border}` }}>
                 <label style={{ cursor: 'pointer', padding: '10px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '50%', color: theme.primary }}><Icons.Camera /><input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'img')} style={{display:'none'}}/></label>
                 <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '10px', background: isRecording ? '#ef4444' : 'rgba(30, 41, 59, 0.8)', border: 'none', borderRadius: '50%', color: theme.primary, cursor: 'pointer' }}>{isRecording ? <Icons.Stop/> : <Icons.Mic/>}</button>
-                <input style={{ flex: 1, padding: '12px', borderRadius: '20px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none' }} value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Сообщение..." />
+                <input style={{ flex: 1, padding: '12px', borderRadius: '20px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none' }} value={newMessage} onChange={e => handleTyping(e.target.value)} placeholder="Сообщение..." />
                 <button type="submit" style={{ padding: '12px 18px', borderRadius: '20px', background: theme.gradient, border: 'none', cursor: 'pointer' }}><Icons.Send /></button>
               </form>
             )}
           </>
         ) : null}
       </div>
+
+      {/* Предпросмотр канала перед подпиской */}
+      {previewChat && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0b0f19', padding: '24px', borderRadius: '20px', width: '100%', maxWidth: '320px', border: `1px solid ${theme.border}`, textAlign: 'center' }}>
+            <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#8b5cf6', margin: '0 auto 12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px' }}>
+              {previewChat.avatar_url ? <img src={previewChat.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="ch"/> : '📢'}
+            </div>
+            <h3 style={{ color: '#fff', margin: '0 0 4px' }}>{previewChat.name}</h3>
+            <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 8px' }}>{previewChat.description}</p>
+            <p style={{ color: theme.primary, fontSize: '12px', marginBottom: '16px' }}>{previewChat.subscriberCount} подписчиков</p>
+            <button onClick={subscribeToPreviewChannel} style={{ width: '100%', padding: '12px', background: theme.gradient, border: 'none', borderRadius: '10px', color: '#fff', fontWeight: 'bold', cursor: 'pointer', marginBottom: '8px' }}>Подписаться</button>
+            <button onClick={() => setPreviewChat(null)} style={{ width: '100%', padding: '8px', background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer' }}>Отмена</button>
+          </div>
+        </div>
+      )}
 
       {/* Окно комментариев */}
       {openCommentsForMsg && (
@@ -673,18 +900,17 @@ export default function Home() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '20px', width: '300px', border: `1px solid ${theme.border}` }}>
             <h3 style={{ color: theme.primary, marginTop: 0 }}>Админ-панель</h3>
-            
             <div style={{ textAlign: 'center', marginBottom: '10px' }}>
               <label style={{ color: theme.primary, fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>
                 📷 Изменить аватарку канала
                 <input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'comm_avatar')} style={{ display: 'none' }} />
               </label>
             </div>
-
             <input value={activeChatData?.name || ''} onChange={(e) => setActiveChatData({...activeChatData, name: e.target.value})} style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} placeholder="Название" />
             <input value={activeChatData?.description || ''} onChange={(e) => setActiveChatData({...activeChatData, description: e.target.value})} style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} placeholder="Описание" />
             <input value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Username участника" style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} />
             <button onClick={addMemberToComm} style={{ width: '100%', padding: '8px', background: theme.primary, border: 'none', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer', fontWeight: 'bold' }}>Добавить участника</button>
+            <button onClick={() => { if (newMemberName) promoteToAdmin(newMemberName); }} style={{ width: '100%', padding: '8px', background: 'rgba(245,158,11,0.15)', border: '1px solid #f59e0b', color: '#f59e0b', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer', fontWeight: 'bold' }}>Назначить админом (введи username выше)</button>
             <button onClick={updateCommunity} style={{ width: '100%', padding: '8px', background: theme.gradient, border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>Сохранить изменения</button>
             <button onClick={() => setShowAdminModal(false)} style={{ width: '100%', padding: '8px', marginTop: '10px', background: 'transparent', color: '#f87171', border: 'none', cursor: 'pointer' }}>Закрыть</button>
           </div>
@@ -708,13 +934,19 @@ export default function Home() {
       {/* Меню взаимодействия с сообщением */}
       {selectedMsgForMenu && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#0b0f19', padding: '15px', borderRadius: '20px', width: '260px', border: `1px solid ${theme.border}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ background: '#0b0f19', padding: '15px', borderRadius: '20px', width: '270px', border: `1px solid ${theme.border}` }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
               {REACTION_EMOJIS.map(em => <span key={em} onClick={() => toggleReaction(selectedMsgForMenu.id, em)} style={{ fontSize: '20px', cursor: 'pointer' }}>{em}</span>)}
+              {customEmojis.map(ce => <img key={ce.id} onClick={() => toggleReaction(selectedMsgForMenu.id, ce.image_url)} src={ce.image_url} alt={ce.name} style={{ width: '22px', height: '22px', cursor: 'pointer' }}/>)}
+              <label style={{ cursor: 'pointer', color: theme.primary, fontSize: '18px' }}>
+                ➕<input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'emoji')} style={{ display: 'none' }}/>
+              </label>
             </div>
             <button onClick={() => pinMessage(selectedMsgForMenu.id)} style={{ width: '100%', padding: '10px', background: 'rgba(30,41,59,0.8)', color: '#fff', border: 'none', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>📌 Закрепить</button>
             <button onClick={() => { setReplyingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }} style={{ width: '100%', padding: '10px', background: 'rgba(30,41,59,0.8)', color: '#fff', border: 'none', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>💬 Ответить</button>
-            <button onClick={() => deleteMessage(selectedMsgForMenu.id)} style={{ width: '100%', padding: '10px', background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid #f87171', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>🗑️ Удалить</button>
+            {canDeleteMessage(selectedMsgForMenu) && (
+              <button onClick={() => deleteMessage(selectedMsgForMenu.id)} style={{ width: '100%', padding: '10px', background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid #f87171', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>🗑️ Удалить</button>
+            )}
             <button onClick={() => setSelectedMsgForMenu(null)} style={{ width: '100%', padding: '8px', background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer' }}>Отмена</button>
           </div>
         </div>
