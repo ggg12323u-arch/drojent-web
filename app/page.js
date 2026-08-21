@@ -10,7 +10,6 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const DEV_EMAIL = 'ggg12323u@gmail.com';
 const REACTION_EMOJIS = ['🔥', '❤️', '👍', '😂', '😮', '😢'];
 
-// Кастомные SVG иконки
 const Icons = {
   Back: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
   Send: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
@@ -24,13 +23,13 @@ const Icons = {
 
 export default function Home() {
   const [session, setSession] = useState(null);
-  const [loginInput, setLoginInput] = useState(''); // Email или Username
+  const [loginInput, setLoginInput] = useState('');
   const [password, setPassword] = useState('');
   const [signupUsername, setSignupUsername] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
 
   const [myProfile, setMyProfile] = useState(null);
-  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'profile' | 'tickets'
+  const [activeTab, setActiveTab] = useState('chats');
 
   const [editUsername, setEditUsername] = useState('');
   const [editBirthdate, setEditBirthdate] = useState('');
@@ -39,10 +38,19 @@ export default function Home() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [publicCommunityResults, setPublicCommunityResults] = useState([]);
   const [myChats, setMyChats] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
+  const [activeChatData, setActiveChatData] = useState(null);
   const [activeUser, setActiveUser] = useState(null);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+
+  // Группы и каналы
+  const [showCreateCommunityModal, setShowCreateCommunityModal] = useState(false);
+  const [communityType, setCommunityType] = useState('group'); // 'group' | 'channel'
+  const [communityName, setCommunityName] = useState('');
+  const [communityDesc, setCommunityDesc] = useState('');
+  const [communityIsPublic, setCommunityIsPublic] = useState(true);
 
   // Поддержка и Тикеты
   const [tickets, setTickets] = useState([]);
@@ -126,23 +134,27 @@ export default function Home() {
     const { data: participants } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
     if (participants && participants.length > 0) {
       const chatIds = participants.map(p => p.chat_id);
+      
+      const { data: chatsData } = await supabase.from('chats').select('*').in('id', chatIds);
       const { data: otherParticipants } = await supabase
         .from('chat_participants')
         .select('chat_id, user_id, profiles(id, username, birthdate, avatar_url, status_badge, custom_status)')
         .in('chat_id', chatIds);
       
-      if (otherParticipants) {
-        const uniqueChats = [];
-        chatIds.forEach(id => {
-          const parts = otherParticipants.filter(p => p.chat_id === id);
-          if (parts.length === 1 && parts[0].user_id === session.user.id) {
-            uniqueChats.push({ chat_id: id, profiles: { id: session.user.id, username: 'Избранное', avatar_url: myProfile?.avatar_url, custom_status: 'Заметки для себя' } });
-          } else {
-            const partner = parts.find(p => p.user_id !== session.user.id);
-            if (partner) uniqueChats.push(partner);
+      if (chatsData) {
+        const formattedChats = chatsData.map(c => {
+          if (c.type === 'group' || c.type === 'channel') {
+            return { chat_id: c.id, isGroupOrChannel: true, chatDetails: c };
           }
-        });
-        setMyChats(uniqueChats);
+          const parts = otherParticipants?.filter(p => p.chat_id === c.id) || [];
+          if (parts.length === 1 && parts[0].user_id === session.user.id) {
+            return { chat_id: c.id, profiles: { id: session.user.id, username: 'Избранное', avatar_url: myProfile?.avatar_url, custom_status: 'Заметки для себя' } };
+          }
+          const partner = parts.find(p => p.user_id !== session.user.id);
+          return partner || null;
+        }).filter(Boolean);
+
+        setMyChats(formattedChats);
       }
     } else {
       setMyChats([]);
@@ -154,17 +166,28 @@ export default function Home() {
   useEffect(() => {
     if (!session) return;
     const searchUsers = async () => {
-      if (!searchQuery.trim()) { setSearchResults([]); return; }
-      const { data } = await supabase.from('profiles').select('*').ilike('username', `%${searchQuery}%`);
-      if (data) setSearchResults(data);
+      if (!searchQuery.trim()) { 
+        setSearchResults([]); 
+        setPublicCommunityResults([]);
+        return; 
+      }
+      const { data: users } = await supabase.from('profiles').select('*').ilike('username', `%${searchQuery}%`);
+      if (users) setSearchResults(users);
+
+      const { data: comms } = await supabase.from('chats').select('*').eq('is_public', true).ilike('name', `%${searchQuery}%`);
+      if (comms) setPublicCommunityResults(comms);
     };
     const timer = setTimeout(searchUsers, 300);
     return () => clearTimeout(timer);
   }, [searchQuery, session]);
 
-  // При смене активного чата прокручиваем вниз один раз
   useEffect(() => {
-    if (!activeChat) { setMessages([]); setReactions([]); return; }
+    if (!activeChat) { setMessages([]); setReactions([]); setActiveChatData(null); return; }
+
+    const fetchChatDetails = async () => {
+      const { data } = await supabase.from('chats').select('*').eq('id', activeChat).single();
+      if (data) setActiveChatData(data);
+    };
 
     const fetchMessagesAndReactions = async () => {
       const { data: msgs } = await supabase.from('messages').select('*').eq('chat_id', activeChat).order('created_at', { ascending: true });
@@ -181,6 +204,7 @@ export default function Home() {
       await supabase.from('messages').update({ is_read: true }).eq('chat_id', activeChat).neq('sender_id', session.user.id);
     };
 
+    fetchChatDetails();
     fetchMessagesAndReactions();
 
     const msgChannel = supabase
@@ -196,58 +220,65 @@ export default function Home() {
     return () => { supabase.removeChannel(msgChannel); };
   }, [activeChat, session]);
 
-  const startChatWithUser = async (targetUser) => {
-    setIsSupportMode(false);
-    if (forwardingMsg) {
-      const isSaved = targetUser.id === session.user.id;
-      let targetChatId = null;
+  // Создание Группы или Канала
+  const createCommunity = async () => {
+    if (!communityName.trim()) { alert('Введите название!'); return; }
 
-      const { data: myPart } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
-      const myChatIds = myPart?.map(c => c.chat_id) || [];
+    const { data: existing } = await supabase
+      .from('chats')
+      .select('id')
+      .eq('owner_id', session.user.id)
+      .eq('type', communityType);
 
-      if (myChatIds.length > 0) {
-        if (isSaved) {
-          for (let cid of myChatIds) {
-            const { data: parts } = await supabase.from('chat_participants').select('user_id').eq('chat_id', cid);
-            if (parts && parts.length === 1 && parts[0].user_id === session.user.id) {
-              targetChatId = cid; break;
-            }
-          }
-        } else {
-          const { data: common } = await supabase.from('chat_participants').select('chat_id').eq('user_id', targetUser.id).in('chat_id', myChatIds).limit(1);
-          if (common && common.length > 0) targetChatId = common[0].chat_id;
-        }
-      }
-
-      if (!targetChatId) {
-        const { data: newC } = await supabase.from('chats').insert([{}]).select().single();
-        if (newC) {
-          targetChatId = newC.id;
-          if (isSaved) {
-            await supabase.from('chat_participants').insert([{ chat_id: newC.id, user_id: session.user.id }]);
-          } else {
-            await supabase.from('chat_participants').insert([
-              { chat_id: newC.id, user_id: session.user.id },
-              { chat_id: newC.id, user_id: targetUser.id }
-            ]);
-          }
-        }
-      }
-
-      if (targetChatId) {
-        await supabase.from('messages').insert([{
-          chat_id: targetChatId,
-          sender_id: session.user.id,
-          content: `↪ Переслано: ${forwardingMsg.content}`,
-          is_read: false
-        }]);
-        alert('Сообщение переслано!');
-        setForwardingMsg(null);
-        fetchMyChats();
-      }
+    if (existing && existing.length > 0) {
+      alert(`У вас уже есть одна созданная ${communityType === 'group' ? 'группа' : 'канал'}! Лимит — 1 на аккаунт.`);
       return;
     }
 
+    const { data: newChat, error } = await supabase.from('chats').insert([{
+      type: communityType,
+      name: communityName,
+      description: communityDesc,
+      owner_id: session.user.id,
+      is_public: communityIsPublic
+    }]).select().single();
+
+    if (error) {
+      alert('Ошибка создания: ' + error.message);
+      return;
+    }
+
+    if (newChat) {
+      await supabase.from('chat_participants').insert([
+        { chat_id: newChat.id, user_id: session.user.id, role: 'owner' }
+      ]);
+      setShowCreateCommunityModal(false);
+      setCommunityName('');
+      setCommunityDesc('');
+      fetchMyChats();
+      setActiveChat(newChat.id);
+      setActiveUser(null);
+    }
+  };
+
+  const joinCommunity = async (comm) => {
+    const { data: exists } = await supabase
+      .from('chat_participants')
+      .select('id')
+      .eq('chat_id', comm.id)
+      .eq('user_id', session.user.id);
+
+    if (!exists || exists.length === 0) {
+      await supabase.from('chat_participants').insert([{ chat_id: comm.id, user_id: session.user.id, role: 'member' }]);
+    }
+    setActiveChat(comm.id);
+    setActiveUser(null);
+    setSearchQuery('');
+    fetchMyChats();
+  };
+
+  const startChatWithUser = async (targetUser) => {
+    setIsSupportMode(false);
     setActiveUser(targetUser);
     setSearchQuery('');
     const isSavedMessages = targetUser.id === session.user.id;
@@ -275,7 +306,7 @@ export default function Home() {
       }
     }
 
-    const { data: newChat } = await supabase.from('chats').insert([{}]).select().single();
+    const { data: newChat } = await supabase.from('chats').insert([{ type: 'dm' }]).select().single();
     if (newChat) {
       if (isSavedMessages) {
         await supabase.from('chat_participants').insert([{ chat_id: newChat.id, user_id: session.user.id }]);
@@ -291,6 +322,11 @@ export default function Home() {
   };
 
   const sendMessage = async (type = 'text', mediaUrl = '') => {
+    if (activeChatData?.type === 'channel' && activeChatData.owner_id !== session.user.id) {
+      alert('В этом канале может публиковать сообщения только владелец!');
+      return;
+    }
+
     if (editingMsg) {
       if (!newMessage.trim()) return;
       await supabase.from('messages').update({ content: newMessage, is_edited: true }).eq('id', editingMsg.id);
@@ -457,7 +493,6 @@ export default function Home() {
     }
   };
 
-  // Вход по Email ИЛИ Username
   const handleAuth = async (type) => {
     setLoading(true);
     if (type === 'signup') {
@@ -540,7 +575,6 @@ export default function Home() {
   }
 
   const isDeveloper = session.user.email === DEV_EMAIL;
-  const displayedList = searchQuery.trim() ? searchResults : myChats.map(c => c.profiles);
 
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', background: '#030712', fontFamily: 'system-ui, sans-serif', color: '#f8fafc', overflow: 'hidden' }}>
@@ -563,7 +597,7 @@ export default function Home() {
           <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px' }}>Выйти</button>
         </div>
 
-        {/* Панель историй (Stories) */}
+        {/* Stories */}
         <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(56, 189, 248, 0.1)', display: 'flex', gap: '12px', overflowX: 'auto', background: 'rgba(7, 10, 18, 0.6)' }}>
           <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px dashed #38bdf8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
@@ -639,7 +673,6 @@ export default function Home() {
             </button>
           </div>
         ) : activeTab === 'tickets' ? (
-          /* Панель Тикетов для Разработчика */
           <div style={{ padding: '16px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <h4 style={{ margin: 0, color: '#38bdf8' }}>Обращения пользователей:</h4>
             {tickets.length === 0 ? (
@@ -673,43 +706,86 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <div onClick={() => startChatWithUser({ id: session.user.id, username: 'Избранное' })} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', cursor: 'pointer', background: 'rgba(56, 189, 248, 0.05)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#38bdf8', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '18px' }}>🔖</div>
-              <div>
-                <div style={{ fontWeight: '600', fontSize: '14px', color: '#38bdf8' }}>Избранное</div>
-                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Заметки и файлы для себя</div>
-              </div>
+            {/* Кнопка создания Группы / Канала */}
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)' }}>
+              <button 
+                onClick={() => setShowCreateCommunityModal(true)}
+                style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #38bdf8', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
+              >
+                ➕ Создать Группу / Канал
+              </button>
             </div>
 
             <div style={{ padding: '12px', borderBottom: '1px solid rgba(56, 189, 248, 0.1)' }}>
-              <input style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} placeholder="🔍 Поиск по @username..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              <input style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} placeholder="🔍 Поиск людей или каналов..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              {displayedList.length === 0 ? (
-                <div style={{ padding: '20px', color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
-                  {searchQuery.trim() ? 'Никто не найден' : 'Найдите пользователя через поиск'}
-                </div>
-              ) : (
-                displayedList.map((u) => u && (
-                  <div key={u.id} onClick={() => startChatWithUser(u)} style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', background: activeUser?.id === u.id ? 'rgba(56, 189, 248, 0.1)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? '#38bdf8' : '#2563eb', color: u.id === session.user.id ? '#000' : '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                      {u.avatar_url ? <img src={u.avatar_url} alt="Av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (u.id === session.user.id ? '🔖' : (u.username?.[0]?.toUpperCase() || 'U'))}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {u.id === session.user.id ? 'Избранное' : `@${u.username || 'user'}`}
-                        {u.status_badge === '👑 Developer' && <Icons.Crown />}
-                        {u.status_badge !== '👑 Developer' && u.id !== session.user.id && <span>ℹ️</span>}
+              {searchQuery.trim() ? (
+                <>
+                  {/* Найденные Группы/Каналы */}
+                  {publicCommunityResults.map(c => (
+                    <div key={c.id} onClick={() => joinCommunity(c)} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: c.type === 'channel' ? '#8b5cf6' : '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                        {c.type === 'channel' ? '📢' : '👥'}
                       </div>
-                      {u.custom_status && <div style={{ fontSize: '11px', color: '#38bdf8' }}>{u.custom_status}</div>}
+                      <div>
+                        <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9' }}>{c.name}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{c.type === 'channel' ? 'Канал' : 'Группа'} • Нажмите для входа</div>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+
+                  {/* Найденные юзеры */}
+                  {searchResults.map(u => (
+                    <div key={u.id} onClick={() => startChatWithUser(u)} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#2563eb', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                        {u.avatar_url ? <img src={u.avatar_url} alt="Av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : u.username?.[0]?.toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9' }}>@{u.username}</div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                myChats.map(item => {
+                  if (item.isGroupOrChannel) {
+                    const c = item.chatDetails;
+                    return (
+                      <div key={c.id} onClick={() => { setActiveChat(c.id); setActiveUser(null); setIsSupportMode(false); }} style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', background: activeChat === c.id ? 'rgba(56, 189, 248, 0.1)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: c.type === 'channel' ? '#8b5cf6' : '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                          {c.type === 'channel' ? '📢' : '👥'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9' }}>{c.name}</div>
+                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>{c.type === 'channel' ? 'Канал' : 'Группа'}</div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const u = item.profiles;
+                  if (!u) return null;
+                  return (
+                    <div key={u.id} onClick={() => startChatWithUser(u)} style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', background: activeUser?.id === u.id ? 'rgba(56, 189, 248, 0.1)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? '#38bdf8' : '#2563eb', color: u.id === session.user.id ? '#000' : '#fff', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                        {u.avatar_url ? <img src={u.avatar_url} alt="Av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (u.id === session.user.id ? '🔖' : (u.username?.[0]?.toUpperCase() || 'U'))}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: '600', fontSize: '14px', color: '#f1f5f9', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {u.id === session.user.id ? 'Избранное' : `@${u.username || 'user'}`}
+                          {u.status_badge === '👑 Developer' && <Icons.Crown />}
+                          {u.status_badge !== '👑 Developer' && u.id !== session.user.id && <span>ℹ️</span>}
+                        </div>
+                        {u.custom_status && <div style={{ fontSize: '11px', color: '#38bdf8' }}>{u.custom_status}</div>}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
 
-            {/* Кнопка чата техподдержки */}
             {!isDeveloper && (
               <div 
                 onClick={() => { setIsSupportMode(true); setActiveChat(null); }}
@@ -723,11 +799,10 @@ export default function Home() {
         )}
       </div>
 
-      {/* Правая панель (Поддержка или Чат) */}
+      {/* Правая панель (Чат / Группа / Канал / Поддержка) */}
       <div style={{ flex: 1, display: (!activeChat && !isSupportMode) ? 'none' : 'flex', flexDirection: 'column', height: '100%', background: '#030712' }} className="chat-area">
         
         {isSupportMode ? (
-          /* Окно Техподдержки для юзера */
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: 'rgba(11, 15, 25, 0.85)', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button onClick={() => setIsSupportMode(false)} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'transparent', color: '#38bdf8', fontSize: '12px' }}>
@@ -768,7 +843,6 @@ export default function Home() {
             </div>
           </div>
         ) : activeChat ? (
-          /* Окно Обычного Чата */
           <>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: 'rgba(11, 15, 25, 0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
@@ -776,12 +850,11 @@ export default function Home() {
                   <Icons.Back />
                 </button>
                 <div>
-                  <h3 onClick={() => setShowUserProfileModal(true)} style={{ margin: 0, fontSize: '15px', color: '#38bdf8', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {activeUser?.id === session.user.id ? '🔖 Избранное' : `@${activeUser?.username}`}
+                  <h3 onClick={() => activeUser && setShowUserProfileModal(true)} style={{ margin: 0, fontSize: '15px', color: '#38bdf8', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {activeChatData?.type === 'group' ? `👥 ${activeChatData.name}` : activeChatData?.type === 'channel' ? `📢 ${activeChatData.name}` : (activeUser?.id === session.user.id ? '🔖 Избранное' : `@${activeUser?.username}`)}
                     {activeUser?.status_badge === '👑 Developer' && <Icons.Crown />}
-                    {activeUser?.status_badge !== '👑 Developer' && activeUser?.id !== session.user.id && <span>ℹ️</span>}
                   </h3>
-                  {activeUser?.custom_status && <div style={{ fontSize: '10px', color: '#94a3b8' }}>{activeUser.custom_status}</div>}
+                  {activeChatData?.description && <div style={{ fontSize: '10px', color: '#94a3b8' }}>{activeChatData.description}</div>}
                 </div>
               </div>
               <button onClick={deleteChat} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px', flexShrink: 0 }}>
@@ -789,7 +862,7 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Лента сообщений */}
+            {/* Сообщения */}
             <div ref={messagesContainerRef} style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {messages.map((msg) => {
                 const isMe = msg.sender_id === session.user.id;
@@ -816,12 +889,12 @@ export default function Home() {
                       }}
                     >
                       {isImage ? (
-                        <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
+                        <div style={{ borderRadius: '12px', overflow: 'hidden' }}>
                           <img src={msg.content.replace('[IMAGE]:', '')} alt="Photo" style={{ maxWidth: '100%', maxHeight: '250px', display: 'block' }} />
                         </div>
                       ) : isVoice ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px' }}>
-                          <span style={{ fontSize: '18px' }}>🎙️</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>🎙️</span>
                           <audio controls src={msg.content.replace('[VOICE]:', '')} style={{ maxWidth: '200px', filter: 'invert(1)' }} />
                         </div>
                       ) : (
@@ -831,7 +904,7 @@ export default function Home() {
                       {msgReactions.length > 0 && (
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
                           {msgReactions.map(r => (
-                            <span key={r.id} style={{ fontSize: '11px', background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <span key={r.id} style={{ fontSize: '11px', background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '10px' }}>
                               {r.emoji}
                             </span>
                           ))}
@@ -849,40 +922,60 @@ export default function Home() {
               })}
             </div>
 
-            {(replyingMsg || editingMsg || forwardingMsg) && (
-              <div style={{ padding: '8px 16px', background: '#070a12', borderTop: '1px solid rgba(56, 189, 248, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                <span style={{ color: '#38bdf8' }}>
-                  {editingMsg ? '✏️ Редактирование...' : replyingMsg ? `💬 Ответ на: "${replyingMsg.content.slice(0, 20)}..."` : '↪ Пересылка сообщения...'}
-                </span>
-                <button onClick={() => { setEditingMsg(null); setReplyingMsg(null); setForwardingMsg(null); setNewMessage(''); }} style={{ border: 'none', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>✖</button>
+            {/* Блокировка ввода в канале для подписчиков */}
+            {activeChatData?.type === 'channel' && activeChatData.owner_id !== session.user.id ? (
+              <div style={{ padding: '16px', background: '#0b0f19', borderTop: '1px solid rgba(56, 189, 248, 0.15)', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                Только владелец канала может оставлять сообщения
               </div>
+            ) : (
+              <form onSubmit={(e) => { e.preventDefault(); sendMessage('text'); }} style={{ padding: '12px 10px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <label style={{ cursor: 'pointer', padding: '10px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icons.Camera />
+                  <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                </label>
+
+                <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '10px', background: isRecording ? 'rgba(239, 68, 68, 0.2)' : 'rgba(30, 41, 59, 0.8)', border: 'none', borderRadius: '50%', cursor: 'pointer' }}>
+                  {isRecording ? <Icons.Stop /> : <Icons.Mic />}
+                </button>
+
+                <input style={{ flex: 1, minWidth: 0, padding: '12px 16px', borderRadius: '24px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', fontSize: '14px' }} placeholder={isRecording ? "Идет запись..." : "Сообщение..."} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} disabled={isRecording} />
+                <button type="submit" style={{ padding: '12px 18px', borderRadius: '24px', border: 'none', background: 'linear-gradient(135deg, #38bdf8 0%, #2563eb 100%)', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
+                  <Icons.Send />
+                </button>
+              </form>
             )}
-
-            <form onSubmit={(e) => { e.preventDefault(); sendMessage('text'); }} style={{ padding: '12px 10px', borderTop: '1px solid rgba(56, 189, 248, 0.15)', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <label style={{ cursor: 'pointer', padding: '10px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icons.Camera />
-                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
-              </label>
-
-              <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '10px', background: isRecording ? 'rgba(239, 68, 68, 0.2)' : 'rgba(30, 41, 59, 0.8)', border: 'none', borderRadius: '50%', cursor: 'pointer' }}>
-                {isRecording ? <Icons.Stop /> : <Icons.Mic />}
-              </button>
-
-              <input style={{ flex: 1, minWidth: 0, padding: '12px 16px', borderRadius: '24px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', fontSize: '14px' }} placeholder={isRecording ? "Идет запись..." : "Сообщение..."} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} disabled={isRecording} />
-              <button type="submit" style={{ padding: '12px 18px', borderRadius: '24px', border: 'none', background: 'linear-gradient(135deg, #38bdf8 0%, #2563eb 100%)', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
-                <Icons.Send />
-              </button>
-            </form>
           </>
         ) : null}
       </div>
 
-      {/* Просмотр Истории */}
-      {activeStory && (
-        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 3000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <button onClick={() => setActiveStory(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>✖</button>
-          <div style={{ color: '#fff', marginBottom: '10px', fontWeight: 'bold' }}>@{activeStory.profiles?.username}</div>
-          <img src={activeStory.media_url} alt="Story" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '12px' }} />
+      {/* Модалка создания Группы/Канала */}
+      {showCreateCommunityModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: '16px' }}>
+          <div style={{ width: '100%', maxWidth: '340px', background: '#0b0f19', borderRadius: '20px', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '20px', color: '#fff' }}>
+            <h3 style={{ margin: '0 0 16px 0', color: '#38bdf8', textAlign: 'center' }}>Создание Сообщества</h3>
+            
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+              <button onClick={() => setCommunityType('group')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: communityType === 'group' ? '#38bdf8' : 'rgba(255,255,255,0.05)', color: communityType === 'group' ? '#000' : '#fff', fontWeight: 'bold', cursor: 'pointer' }}>
+                👥 Группа
+              </button>
+              <button onClick={() => setCommunityType('channel')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: communityType === 'channel' ? '#38bdf8' : 'rgba(255,255,255,0.05)', color: communityType === 'channel' ? '#000' : '#fff', fontWeight: 'bold', cursor: 'pointer' }}>
+                📢 Канал
+              </button>
+            </div>
+
+            <input style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', boxSizing: 'border-box', marginBottom: '10px' }} placeholder="Название..." value={communityName} onChange={(e) => setCommunityName(e.target.value)} />
+            <input style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none', boxSizing: 'border-box', marginBottom: '14px' }} placeholder="Описание..." value={communityDesc} onChange={(e) => setCommunityDesc(e.target.value)} />
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#94a3b8', marginBottom: '16px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={communityIsPublic} onChange={(e) => setCommunityIsPublic(e.target.checked)} />
+              Сделать публичным (виден в поиске)
+            </label>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={createCommunity} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#38bdf8', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>Создать</button>
+              <button onClick={() => setShowCreateCommunityModal(false)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}>Отмена</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -915,32 +1008,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* Модалка профиля собеседника */}
-      {showUserProfileModal && activeUser && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
-          <div style={{ width: '100%', maxWidth: '320px', background: '#0b0f19', borderRadius: '20px', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '20px', textAlign: 'center', color: '#fff' }}>
-            <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#2563eb', margin: '0 auto 10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>
-              {activeUser.avatar_url ? <img src={activeUser.avatar_url} alt="Av" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (activeUser.username?.[0]?.toUpperCase() || 'U')}
-            </div>
-            <h3 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-              @{activeUser.username}
-              {activeUser.status_badge === '👑 Developer' && <Icons.Crown />}
-            </h3>
-            <p style={{ margin: '0 0 6px 0', fontSize: '12px', color: '#38bdf8', fontWeight: 'bold' }}>
-              {activeUser.status_badge || 'ℹ️ User'}
-            </p>
-            {activeUser.custom_status && (
-              <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#e2e8f0', fontStyle: 'italic' }}>
-                «{activeUser.custom_status}»
-              </p>
-            )}
-            <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#94a3b8' }}>
-              📅 Дата рождения: {activeUser.birthdate || 'Не указана'}
-            </p>
-            <button onClick={() => setShowUserProfileModal(false)} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: 'none', background: '#38bdf8', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>
-              Закрыть
-            </button>
-          </div>
+      {/* Просмотр Истории */}
+      {activeStory && (
+        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 3000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => setActiveStory(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>✖</button>
+          <div style={{ color: '#fff', marginBottom: '10px', fontWeight: 'bold' }}>@{activeStory.profiles?.username}</div>
+          <img src={activeStory.media_url} alt="Story" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '12px' }} />
         </div>
       )}
 
