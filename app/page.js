@@ -9,49 +9,39 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const DEV_EMAIL = 'ggg12323u@gmail.com';
 const REACTION_EMOJIS = ['🔥', '❤️', '👍', '😂', '😮', '😢'];
+const AURA_PROMO_CODE = 'Au100';
 
-// Палитры тем
 const THEMES = {
-  blue: {
-    primary: '#38bdf8',
-    secondary: '#2563eb',
-    glow: 'rgba(56, 189, 248, 0.4)',
-    border: 'rgba(56, 189, 248, 0.3)',
-    bgCard: 'rgba(15, 23, 42, 0.75)',
-    gradient: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)'
-  },
-  green: {
-    primary: '#22c55e',
-    secondary: '#16a34a',
-    glow: 'rgba(34, 197, 94, 0.4)',
-    border: 'rgba(34, 197, 94, 0.3)',
-    bgCard: 'rgba(6, 78, 59, 0.65)',
-    gradient: 'linear-gradient(135deg, #15803d 0%, #22c55e 100%)'
-  },
-  purple: {
-    primary: '#c084fc',
-    secondary: '#9333ea',
-    glow: 'rgba(192, 132, 252, 0.4)',
-    border: 'rgba(192, 132, 252, 0.3)',
-    bgCard: 'rgba(88, 28, 135, 0.65)',
-    gradient: 'linear-gradient(135deg, #7e22ce 0%, #c084fc 100%)'
-  }
+  blue: { primary: '#38bdf8', secondary: '#2563eb', glow: 'rgba(56, 189, 248, 0.4)', border: 'rgba(56, 189, 248, 0.3)', bgCard: 'rgba(15, 23, 42, 0.75)', gradient: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)', locked: false },
+  green: { primary: '#22c55e', secondary: '#16a34a', glow: 'rgba(34, 197, 94, 0.4)', border: 'rgba(34, 197, 94, 0.3)', bgCard: 'rgba(6, 78, 59, 0.65)', gradient: 'linear-gradient(135deg, #15803d 0%, #22c55e 100%)', locked: true },
+  purple: { primary: '#c084fc', secondary: '#9333ea', glow: 'rgba(192, 132, 252, 0.4)', border: 'rgba(192, 132, 252, 0.3)', bgCard: 'rgba(88, 28, 135, 0.65)', gradient: 'linear-gradient(135deg, #7e22ce 0%, #c084fc 100%)', locked: true }
 };
 
 const Icons = {
   Back: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
   Send: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
   Camera: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>,
+  Video: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>,
   Mic: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>,
   Stop: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>,
   Trash: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
   Support: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
   Pin: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-6H6.5L5 17z"/><path d="M9 11V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7"/></svg>,
   Crown: () => <span style={{ filter: 'drop-shadow(0 0 6px #f59e0b)' }}>👑</span>,
-  // Новые иконки статуса доставки: круг = отправлено, круг с точкой = прочитано
+  Aura: () => <span style={{ filter: 'drop-shadow(0 0 6px #c084fc)' }}>💠</span>,
+  Lock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
   Sent: ({ color = 'currentColor' }) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="12" cy="12" r="9"/></svg>,
   Read: ({ color = 'currentColor' }) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill={color}/></svg>
 };
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return 'только что';
+  if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} ч назад`;
+  return `${Math.floor(diff / 86400)} дн назад`;
+}
 
 export default function Home() {
   const [session, setSession] = useState(null);
@@ -61,15 +51,25 @@ export default function Home() {
   const [signupEmail, setSignupEmail] = useState('');
 
   const [myProfile, setMyProfile] = useState(null);
-  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'profile' | 'tickets' | 'users'
-  const [themeKey, setThemeKey] = useState('blue'); // 'blue' | 'green' | 'purple'
+  const [activeTab, setActiveTab] = useState('chats');
+  const [themeKey, setThemeKey] = useState('blue');
   const theme = THEMES[themeKey];
+  const isAura = !!myProfile?.is_aura;
+  const isDeveloper = session?.user?.email === DEV_EMAIL;
 
   const [editFullName, setEditFullName] = useState('');
   const [editUsername, setEditUsername] = useState('');
   const [editBirthdate, setEditBirthdate] = useState('');
   const [editCustomStatus, setEditCustomStatus] = useState('');
+  const [editEmojiStatus, setEditEmojiStatus] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [pinInput, setPinInput] = useState('');
+  const [newPin, setNewPin] = useState('');
+
+  // Экран блокировки PIN-кодом
+  const [locked, setLocked] = useState(false);
+  const [pinAttempt, setPinAttempt] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -79,13 +79,16 @@ export default function Home() {
   const [activeChatData, setActiveChatData] = useState(null);
   const [pinnedMsgData, setPinnedMsgData] = useState(null);
   const [activeUser, setActiveUser] = useState(null);
-  const [myChatRole, setMyChatRole] = useState(null);
   const [subscriberCount, setSubscriberCount] = useState(0);
+  const [subscribersList, setSubscribersList] = useState([]);
+  const activeChatRef = useRef(null);
+  useEffect(() => { activeChatRef.current = activeChat; }, [activeChat]);
 
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [viewedProfile, setViewedProfile] = useState(null);
   const [showCreateCommunityModal, setShowCreateCommunityModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [previewChat, setPreviewChat] = useState(null); // предпросмотр канала перед подпиской
+  const [previewChat, setPreviewChat] = useState(null);
 
   const [communityType, setCommunityType] = useState('group');
   const [communityName, setCommunityName] = useState('');
@@ -93,31 +96,25 @@ export default function Home() {
   const [communityAvatar, setCommunityAvatar] = useState('');
   const [newMemberName, setNewMemberName] = useState('');
 
-  // Комментарии к постам в каналах
   const [openCommentsForMsg, setOpenCommentsForMsg] = useState(null);
   const [commentsList, setCommentsList] = useState([]);
   const [newCommentText, setNewCommentText] = useState('');
 
-  // Поддержка
   const [tickets, setTickets] = useState([]);
   const [mySupportMessages, setMySupportMessages] = useState([]);
   const [newSupportMsg, setNewSupportMsg] = useState('');
   const [isSupportMode, setIsSupportMode] = useState(false);
   const [replyTicketText, setReplyTicketText] = useState({});
 
-  // Stories
   const [stories, setStories] = useState([]);
   const [activeStory, setActiveStory] = useState(null);
 
-  // Сообщения
   const [messages, setMessages] = useState([]);
   const [reactions, setReactions] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [editingMsg, setEditingMsg] = useState(null);
   const [replyingMsg, setReplyingMsg] = useState(null);
-  const [forwardingMsg, setForwardingMsg] = useState(null);
   const [selectedMsgForMenu, setSelectedMsgForMenu] = useState(null);
 
   const [isRecording, setIsRecording] = useState(false);
@@ -126,14 +123,17 @@ export default function Home() {
   const messagesContainerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // Кастомные эмодзи чата
   const [customEmojis, setCustomEmojis] = useState([]);
-
-  // Админ-панель разработчика: список пользователей
   const [allUsers, setAllUsers] = useState([]);
-
-  // Печатает / онлайн
   const [typingUsers, setTypingUsers] = useState([]);
+
+  const [polls, setPolls] = useState([]);
+  const [pollVotes, setPollVotes] = useState([]);
+  const [showPollModal, setShowPollModal] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+
+  const [blockedIds, setBlockedIds] = useState([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -142,9 +142,7 @@ export default function Home() {
   }, []);
 
   const scrollToBottom = () => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-    }
+    if (messagesContainerRef.current) messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
   };
 
   const loadProfile = async () => {
@@ -156,11 +154,19 @@ export default function Home() {
       setEditUsername(data.username || '');
       setEditBirthdate(data.birthdate || '');
       setEditCustomStatus(data.custom_status || '');
+      setEditEmojiStatus(data.emoji_status || '');
       setAvatarUrl(data.avatar_url || '');
+      if (data.theme && THEMES[data.theme] && (data.is_aura || !THEMES[data.theme].locked)) setThemeKey(data.theme);
+      if (data.pin_code) setLocked(true);
     }
   };
 
-  // Только истории контактов (+ свои)
+  const loadBlocked = async () => {
+    if (!session) return;
+    const { data } = await supabase.from('blocks').select('blocked_id').eq('owner_id', session.user.id);
+    setBlockedIds((data || []).map(b => b.blocked_id));
+  };
+
   const fetchStories = async () => {
     if (!session) return;
     const { data: contactRows } = await supabase.from('contacts').select('contact_id').eq('owner_id', session.user.id);
@@ -172,8 +178,9 @@ export default function Home() {
 
   const fetchSupportTickets = async () => {
     if (!session) return;
-    if (session.user.email === DEV_EMAIL) {
-      const { data } = await supabase.from('support_tickets').select('*, profiles(username, avatar_url)').order('created_at', { ascending: false });
+    if (isDeveloper) {
+      const { data, error } = await supabase.from('support_tickets').select('*, profiles(username, avatar_url)').order('created_at', { ascending: false });
+      if (error) console.error('tickets load error', error);
       if (data) setTickets(data);
     } else {
       const { data } = await supabase.from('support_tickets').select('*').eq('user_id', session.user.id).order('created_at', { ascending: true });
@@ -182,7 +189,7 @@ export default function Home() {
   };
 
   const fetchAllUsers = async () => {
-    if (!session || session.user.email !== DEV_EMAIL) return;
+    if (!session || !isDeveloper) return;
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (data) setAllUsers(data);
   };
@@ -192,14 +199,18 @@ export default function Home() {
     fetchAllUsers();
   };
 
+  const toggleAuraUser = async (u) => {
+    await supabase.from('profiles').update({ is_aura: !u.is_aura }).eq('id', u.id);
+    fetchAllUsers();
+  };
+
   const fetchMyChats = async () => {
     if (!session) return;
     const { data: parts } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
     if (parts && parts.length > 0) {
       const chatIds = parts.map(p => p.chat_id);
       const { data: chatsData } = await supabase.from('chats').select('*').in('id', chatIds);
-      const { data: allParts } = await supabase.from('chat_participants').select('chat_id, user_id, profiles(id, username, full_name, avatar_url, status_badge, custom_status, is_online)').in('chat_id', chatIds);
-
+      const { data: allParts } = await supabase.from('chat_participants').select('chat_id, user_id, profiles(id, username, full_name, avatar_url, status_badge, custom_status, emoji_status, is_online, is_aura)').in('chat_id', chatIds);
       if (chatsData) {
         const formatted = chatsData.map(c => {
           if (c.type === 'group' || c.type === 'channel') return { chat_id: c.id, isGroupOrChannel: true, chatDetails: c };
@@ -207,7 +218,7 @@ export default function Home() {
           if (p.length === 1 && p[0].user_id === session.user.id) return { chat_id: c.id, profiles: { id: session.user.id, username: 'Избранное', avatar_url: myProfile?.avatar_url, custom_status: 'Заметки' } };
           const partner = p.find(x => x.user_id !== session.user.id);
           return partner || null;
-        }).filter(Boolean);
+        }).filter(Boolean).filter(item => !blockedIds.includes(item.profiles?.id));
         setMyChats(formatted);
       }
     } else setMyChats([]);
@@ -215,15 +226,12 @@ export default function Home() {
 
   useEffect(() => {
     loadProfile();
-    if (session) {
-      fetchStories();
-      fetchSupportTickets();
-      fetchMyChats();
-      fetchAllUsers();
-    }
+    if (session) { loadBlocked(); fetchStories(); fetchSupportTickets(); fetchMyChats(); fetchAllUsers(); }
   }, [session]);
 
-  // Глобальная realtime-подписка — обновляет список чатов, истории и т.д. без перезагрузки страницы
+  useEffect(() => { if (session) fetchMyChats(); }, [blockedIds]);
+
+  // Глобальная realtime-подписка — включая тикеты поддержки (раньше "чёрная дыра": не было ни подписки, ни явной ошибки при insert)
   useEffect(() => {
     if (!session) return;
     const globalChan = supabase.channel('global_updates_' + session.user.id)
@@ -231,12 +239,12 @@ export default function Home() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_participants' }, () => fetchMyChats())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => fetchMyChats())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'stories' }, () => fetchStories())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => fetchMyChats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => fetchSupportTickets())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => { fetchMyChats(); if (isDeveloper) fetchAllUsers(); })
       .subscribe();
     return () => { supabase.removeChannel(globalChan); };
   }, [session]);
 
-  // Онлайн-статус: heartbeat пока страница открыта
   useEffect(() => {
     if (!session) return;
     const goOnline = () => supabase.from('profiles').update({ is_online: true, last_seen: new Date().toISOString() }).eq('id', session.user.id);
@@ -244,8 +252,9 @@ export default function Home() {
     goOnline();
     const iv = setInterval(goOnline, 25000);
     window.addEventListener('beforeunload', goOffline);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) goOffline(); else goOnline(); });
-    return () => { clearInterval(iv); window.removeEventListener('beforeunload', goOffline); goOffline(); };
+    const visHandler = () => { if (document.hidden) goOffline(); else goOnline(); };
+    document.addEventListener('visibilitychange', visHandler);
+    return () => { clearInterval(iv); window.removeEventListener('beforeunload', goOffline); document.removeEventListener('visibilitychange', visHandler); goOffline(); };
   }, [session]);
 
   useEffect(() => {
@@ -253,58 +262,73 @@ export default function Home() {
     const search = async () => {
       if (!searchQuery.trim()) { setSearchResults([]); setPublicCommunityResults([]); return; }
       const { data: u } = await supabase.from('profiles').select('*').ilike('username', `%${searchQuery}%`);
-      if (u) setSearchResults(u);
+      if (u) setSearchResults(u.filter(x => !blockedIds.includes(x.id)));
       const { data: c } = await supabase.from('chats').select('*').eq('is_public', true).ilike('name', `%${searchQuery}%`);
       if (c) setPublicCommunityResults(c);
     };
     const t = setTimeout(search, 300);
     return () => clearTimeout(t);
-  }, [searchQuery, session]);
+  }, [searchQuery, session, blockedIds]);
 
+  // Загрузка активного чата — с защитой от гонок при быстром переключении чатов
   useEffect(() => {
-    if (!activeChat) { setMessages([]); setReactions([]); setActiveChatData(null); setPinnedMsgData(null); setMyChatRole(null); setSubscriberCount(0); setCustomEmojis([]); return; }
-    const loadChat = async () => {
-      const { data: chat } = await supabase.from('chats').select('*').eq('id', activeChat).single();
+    if (!activeChat) { setMessages([]); setReactions([]); setActiveChatData(null); setPinnedMsgData(null); setSubscriberCount(0); setCustomEmojis([]); setPolls([]); setPollVotes([]); return; }
+    const chatIdForThisEffect = activeChat;
+    const isStale = () => activeChatRef.current !== chatIdForThisEffect;
+
+    const loadChat = async (isInitial) => {
+      if (isStale()) return;
+      const { data: chat } = await supabase.from('chats').select('*').eq('id', chatIdForThisEffect).single();
+      if (isStale()) return;
       if (chat) {
         setActiveChatData(chat);
         setCommunityAvatar(chat.avatar_url || '');
         if (chat.pinned_message_id) {
           const { data: pin } = await supabase.from('messages').select('*').eq('id', chat.pinned_message_id).single();
-          if (pin) setPinnedMsgData(pin);
-        } else {
-          setPinnedMsgData(null);
-        }
+          if (isStale()) return;
+          if (pin) setPinnedMsgData(pin); else setPinnedMsgData(null);
+        } else setPinnedMsgData(null);
         if (chat.type === 'channel' || chat.type === 'group') {
-          const { count } = await supabase.from('chat_participants').select('*', { count: 'exact', head: true }).eq('chat_id', activeChat);
+          const { count } = await supabase.from('chat_participants').select('*', { count: 'exact', head: true }).eq('chat_id', chatIdForThisEffect);
+          if (isStale()) return;
           setSubscriberCount(count || 0);
         }
       }
-      const { data: role } = await supabase.from('chat_participants').select('role').eq('chat_id', activeChat).eq('user_id', session.user.id).single();
-      setMyChatRole(role?.role || 'member');
-
-      const { data: msgs } = await supabase.from('messages').select('*').eq('chat_id', activeChat).order('created_at', { ascending: true });
+      const { data: msgs } = await supabase.from('messages').select('*').eq('chat_id', chatIdForThisEffect).order('created_at', { ascending: true });
+      if (isStale()) return;
       if (msgs) {
         setMessages(msgs);
-        setTimeout(scrollToBottom, 150);
+        if (isInitial) setTimeout(() => { if (!isStale()) scrollToBottom(); }, 150);
         const { data: r } = await supabase.from('message_reactions').select('*').in('message_id', msgs.map(m => m.id));
+        if (isStale()) return;
         if (r) setReactions(r);
+        if (msgs.length > 0) {
+          const { data: pl } = await supabase.from('polls').select('*').in('message_id', msgs.map(m => m.id));
+          if (isStale()) return;
+          if (pl && pl.length > 0) {
+            setPolls(pl);
+            const { data: pv } = await supabase.from('poll_votes').select('*').in('poll_id', pl.map(p => p.id));
+            if (isStale()) return;
+            if (pv) setPollVotes(pv);
+          } else { setPolls([]); setPollVotes([]); }
+        }
       }
-      const { data: emj } = await supabase.from('custom_emojis').select('*').eq('chat_id', activeChat);
+      const { data: emj } = await supabase.from('custom_emojis').select('*').eq('chat_id', chatIdForThisEffect);
+      if (isStale()) return;
       if (emj) setCustomEmojis(emj);
-
-      await supabase.from('messages').update({ is_read: true }).eq('chat_id', activeChat).neq('sender_id', session.user.id);
+      await supabase.from('messages').update({ is_read: true }).eq('chat_id', chatIdForThisEffect).neq('sender_id', session.user.id);
     };
-    loadChat();
-    const chan = supabase.channel(`chat_${activeChat}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${activeChat}` }, loadChat)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, loadChat)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `id=eq.${activeChat}` }, loadChat)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_participants', filter: `chat_id=eq.${activeChat}` }, loadChat)
+    loadChat(true);
+    const chan = supabase.channel(`chat_${chatIdForThisEffect}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatIdForThisEffect}` }, () => loadChat(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, () => loadChat(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `id=eq.${chatIdForThisEffect}` }, () => loadChat(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_participants', filter: `chat_id=eq.${chatIdForThisEffect}` }, () => loadChat(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_votes' }, () => loadChat(false))
       .subscribe();
     return () => { supabase.removeChannel(chan); };
   }, [activeChat, session]);
 
-  // Статус "печатает"
   useEffect(() => {
     if (!activeChat || !session) { setTypingUsers([]); return; }
     const loadTyping = async () => {
@@ -313,9 +337,7 @@ export default function Home() {
       setTypingUsers(data || []);
     };
     loadTyping();
-    const chan = supabase.channel(`typing_${activeChat}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'typing_status', filter: `chat_id=eq.${activeChat}` }, loadTyping)
-      .subscribe();
+    const chan = supabase.channel(`typing_${activeChat}`).on('postgres_changes', { event: '*', schema: 'public', table: 'typing_status', filter: `chat_id=eq.${activeChat}` }, loadTyping).subscribe();
     const iv = setInterval(loadTyping, 2500);
     return () => { supabase.removeChannel(chan); clearInterval(iv); };
   }, [activeChat, session]);
@@ -325,16 +347,13 @@ export default function Home() {
     if (!activeChat || !session) return;
     supabase.from('typing_status').upsert({ chat_id: activeChat, user_id: session.user.id, updated_at: new Date().toISOString() });
     clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      supabase.from('typing_status').delete().eq('chat_id', activeChat).eq('user_id', session.user.id);
-    }, 3000);
+    typingTimeoutRef.current = setTimeout(() => { supabase.from('typing_status').delete().eq('chat_id', activeChat).eq('user_id', session.user.id); }, 3000);
   };
 
-  // Загрузка комментариев
   useEffect(() => {
     if (!openCommentsForMsg) { setCommentsList([]); return; }
     const loadComments = async () => {
-      const { data } = await supabase.from('channel_comments').select('*, profiles(username, avatar_url)').eq('message_id', openCommentsForMsg.id).order('created_at', { ascending: true });
+      const { data } = await supabase.from('channel_comments').select('*, profiles(id, username, avatar_url, full_name)').eq('message_id', openCommentsForMsg.id).order('created_at', { ascending: true });
       if (data) setCommentsList(data);
     };
     loadComments();
@@ -344,30 +363,70 @@ export default function Home() {
     if (!newCommentText.trim() || !openCommentsForMsg) return;
     await supabase.from('channel_comments').insert([{ message_id: openCommentsForMsg.id, user_id: session.user.id, content: newCommentText }]);
     setNewCommentText('');
-    const { data } = await supabase.from('channel_comments').select('*, profiles(username, avatar_url)').eq('message_id', openCommentsForMsg.id).order('created_at', { ascending: true });
+    const { data } = await supabase.from('channel_comments').select('*, profiles(id, username, avatar_url, full_name)').eq('message_id', openCommentsForMsg.id).order('created_at', { ascending: true });
     if (data) setCommentsList(data);
   };
 
+  const usernameTaken = async (uname) => {
+    const { data } = await supabase.from('profiles').select('id').ilike('username', uname).neq('id', session?.user?.id || '00000000-0000-0000-0000-000000000000');
+    return data && data.length > 0;
+  };
+
   const saveProfile = async () => {
-    await supabase.from('profiles').update({ full_name: editFullName, username: editUsername, birthdate: editBirthdate, custom_status: editCustomStatus, avatar_url: avatarUrl }).eq('id', session.user.id);
+    if (editUsername !== myProfile?.username && await usernameTaken(editUsername)) { alert('Этот username уже занят.'); return; }
+    if (newPin && (newPin.length < 4 || !/^\d+$/.test(newPin))) { alert('Код-пароль — минимум 4 цифры.'); return; }
+    const payload = { full_name: editFullName, username: editUsername, birthdate: editBirthdate || null, custom_status: editCustomStatus, avatar_url: avatarUrl, theme: themeKey };
+    if (isAura) payload.emoji_status = editEmojiStatus;
+    if (newPin) payload.pin_code = newPin;
+    await supabase.from('profiles').update(payload).eq('id', session.user.id);
     alert('Профиль сохранен!');
+    setNewPin('');
     loadProfile();
+  };
+
+  const activatePromo = async () => {
+    if (promoCodeInput.trim() === AURA_PROMO_CODE) {
+      await supabase.from('profiles').update({ is_aura: true }).eq('id', session.user.id);
+      alert('Аура активирована! 💠');
+      setPromoCodeInput('');
+      loadProfile();
+    } else {
+      alert('Неверный промокод.');
+    }
+  };
+
+  const openBuySupport = () => {
+    setActiveTab('chats');
+    setIsSupportMode(true);
+    setNewSupportMsg('Хочу подписку Аура');
   };
 
   const createCommunity = async () => {
     if (!communityName.trim()) return;
     const { data: existing } = await supabase.from('chats').select('id').eq('owner_id', session.user.id).eq('type', communityType);
-    if (existing && existing.length > 0) { alert(`Лимит: 1 ${communityType} на аккаунт.`); return; }
+    const limit = isAura ? 3 : 1;
+    if (existing && existing.length >= limit) { alert(`Лимит: ${limit} ${communityType === 'channel' ? 'канал(а/ов)' : 'групп(а/ы)'} на аккаунт${isAura ? '' : '. Оформите Аура для увеличения лимита.'}`); return; }
     const { data: newC } = await supabase.from('chats').insert([{ type: communityType, name: communityName, description: communityDesc, owner_id: session.user.id, is_public: true }]).select().single();
     if (newC) {
       await supabase.from('chat_participants').insert([{ chat_id: newC.id, user_id: session.user.id, role: 'owner' }]);
-      setShowCreateCommunityModal(false); fetchMyChats(); setActiveChat(newC.id);
+      setShowCreateCommunityModal(false); setCommunityName(''); setCommunityDesc(''); fetchMyChats(); setActiveChat(newC.id);
     }
   };
 
   const updateCommunity = async () => {
-    await supabase.from('chats').update({ name: activeChatData.name, description: activeChatData.description, avatar_url: communityAvatar }).eq('id', activeChat);
+    await supabase.from('chats').update({ name: activeChatData.name, description: activeChatData.description, avatar_url: communityAvatar, is_public: activeChatData.is_public }).eq('id', activeChat);
     alert('Сохранено'); setShowAdminModal(false); fetchMyChats();
+  };
+
+  const openAdminPanel = async () => {
+    const { data } = await supabase.from('chat_participants').select('user_id, profiles(id, username, full_name, avatar_url)').eq('chat_id', activeChat);
+    setSubscribersList(data || []);
+    setShowAdminModal(true);
+  };
+
+  const removeSubscriber = async (userId) => {
+    await supabase.from('chat_participants').delete().eq('chat_id', activeChat).eq('user_id', userId);
+    openAdminPanel();
   };
 
   const pinMessage = async (msgId) => {
@@ -375,7 +434,6 @@ export default function Home() {
     setSelectedMsgForMenu(null);
   };
 
-  // Открепление сообщения
   const unpinMessage = async () => {
     await supabase.from('chats').update({ pinned_message_id: null }).eq('id', activeChat);
     setPinnedMsgData(null);
@@ -385,14 +443,7 @@ export default function Home() {
     const { data: u } = await supabase.from('profiles').select('id').eq('username', newMemberName).single();
     if (!u) { alert('Пользователь не найден'); return; }
     await supabase.from('chat_participants').insert({ chat_id: activeChat, user_id: u.id, role: 'member' });
-    setNewMemberName(''); alert('Добавлен!');
-  };
-
-  const promoteToAdmin = async (username) => {
-    const { data: u } = await supabase.from('profiles').select('id').eq('username', username).single();
-    if (!u) { alert('Пользователь не найден'); return; }
-    await supabase.from('chat_participants').update({ role: 'admin' }).eq('chat_id', activeChat).eq('user_id', u.id);
-    alert('Назначен админом чата');
+    setNewMemberName(''); openAdminPanel();
   };
 
   const joinCommunity = async (comm) => {
@@ -401,7 +452,12 @@ export default function Home() {
     setActiveChat(comm.id); setActiveUser(null); setSearchQuery(''); fetchMyChats();
   };
 
-  // Клик по каналу/группе в поиске: канал сначала показывает предпросмотр с кнопкой "Подписаться"
+  const leaveCommunity = async () => {
+    if (!confirm('Отписаться от этого чата?')) return;
+    await supabase.from('chat_participants').delete().eq('chat_id', activeChat).eq('user_id', session.user.id);
+    setActiveChat(null); fetchMyChats();
+  };
+
   const openChannelOrGroup = async (c) => {
     const { data: ex } = await supabase.from('chat_participants').select('id').eq('chat_id', c.id).eq('user_id', session.user.id);
     const isSub = ex && ex.length > 0;
@@ -413,19 +469,18 @@ export default function Home() {
     joinCommunity(c);
   };
 
-  const subscribeToPreviewChannel = async () => {
-    if (!previewChat) return;
-    await joinCommunity(previewChat);
-    setPreviewChat(null);
-  };
+  const subscribeToPreviewChannel = async () => { if (previewChat) { await joinCommunity(previewChat); setPreviewChat(null); } };
 
+  // ИСПРАВЛЕНО: раньше поиск "общего чата" с пользователем не отличал ЛС от каналов/групп,
+  // из-за чего попытка написать человеку, с которым вы оба состоите в одном канале,
+  // открывала этот канал вместо личной переписки.
   const startChatWithUser = async (targetUser) => {
+    if (blockedIds.includes(targetUser.id)) { alert('Вы заблокировали этого пользователя.'); return; }
     setIsSupportMode(false); setActiveUser(targetUser); setSearchQuery('');
     const isSaved = targetUser.id === session.user.id;
     const { data: myP } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
     const myChatIds = myP?.map(c => c.chat_id) || [];
 
-    // Автоматически добавляем друг друга в контакты (нужно для видимости историй)
     if (!isSaved) {
       const { data: existingContact } = await supabase.from('contacts').select('id').eq('owner_id', session.user.id).eq('contact_id', targetUser.id);
       if (!existingContact || existingContact.length === 0) {
@@ -435,13 +490,15 @@ export default function Home() {
     }
 
     if (myChatIds.length > 0) {
+      const { data: myDmChats } = await supabase.from('chats').select('id').in('id', myChatIds).eq('type', 'dm');
+      const dmChatIds = (myDmChats || []).map(c => c.id);
       if (isSaved) {
-        for (let cid of myChatIds) {
+        for (let cid of dmChatIds) {
           const { data: p } = await supabase.from('chat_participants').select('user_id').eq('chat_id', cid);
           if (p && p.length === 1 && p[0].user_id === session.user.id) { setActiveChat(cid); return; }
         }
-      } else {
-        const { data: cChat } = await supabase.from('chat_participants').select('chat_id').eq('user_id', targetUser.id).in('chat_id', myChatIds).limit(1);
+      } else if (dmChatIds.length > 0) {
+        const { data: cChat } = await supabase.from('chat_participants').select('chat_id').eq('user_id', targetUser.id).in('chat_id', dmChatIds).limit(1);
         if (cChat && cChat.length > 0) { setActiveChat(cChat[0].chat_id); return; }
       }
     }
@@ -455,11 +512,6 @@ export default function Home() {
 
   const sendMessage = async (type = 'text', mediaUrl = '') => {
     if (activeChatData?.type === 'channel' && activeChatData.owner_id !== session.user.id) return;
-    if (editingMsg) {
-      if (!newMessage.trim()) return;
-      await supabase.from('messages').update({ content: newMessage, is_edited: true }).eq('id', editingMsg.id);
-      setEditingMsg(null); setNewMessage(''); return;
-    }
     const txt = type === 'text' ? newMessage : mediaUrl;
     if (type === 'text' && !txt.trim()) return;
     if (type === 'text') setNewMessage('');
@@ -470,29 +522,26 @@ export default function Home() {
     supabase.from('typing_status').delete().eq('chat_id', activeChat).eq('user_id', session.user.id);
   };
 
-  // Права: в группах/каналах удалять чужие сообщения может только владелец/админ чата; свои — всегда
-  const isChatAdmin = !!session && (activeChatData?.owner_id === session.user.id || myChatRole === 'admin');
+  // Только создатель канала/группы — админов больше нет. Остальные могут только отписаться.
+  const isCreator = !!session && activeChatData?.owner_id === session.user.id;
 
   const canDeleteMessage = (msg) => {
     if (!session) return false;
     if (msg.sender_id === session.user.id) return true;
-    if (activeChatData?.type === 'group' || activeChatData?.type === 'channel') return isChatAdmin;
+    if (activeChatData?.type === 'group' || activeChatData?.type === 'channel') return isCreator;
     return false;
   };
 
   const deleteMessage = async (msgId) => {
     const msg = messages.find(m => m.id === msgId);
-    if (msg && !canDeleteMessage(msg)) { alert('Удалять чужие сообщения может только админ.'); return; }
+    if (msg && !canDeleteMessage(msg)) { alert('Удалять чужие сообщения может только создатель.'); return; }
     await supabase.from('messages').delete().eq('id', msgId);
     setMessages(prev => prev.filter(m => m.id !== msgId));
     setSelectedMsgForMenu(null);
   };
 
   const deleteChat = async () => {
-    if ((activeChatData?.type === 'group' || activeChatData?.type === 'channel') && !isChatAdmin) {
-      alert('Удалить этот чат может только админ.');
-      return;
-    }
+    if ((activeChatData?.type === 'group' || activeChatData?.type === 'channel') && !isCreator) { leaveCommunity(); return; }
     if (confirm('Удалить этот чат?')) {
       await supabase.from('chats').delete().eq('id', activeChat);
       setActiveChat(null); setActiveUser(null); fetchMyChats();
@@ -506,18 +555,55 @@ export default function Home() {
     setSelectedMsgForMenu(null);
   };
 
+  const createPoll = async () => {
+    if (!isAura) { alert('Опросы доступны только с подпиской Аура 💠'); return; }
+    const opts = pollOptions.map(o => o.trim()).filter(Boolean);
+    if (!pollQuestion.trim() || opts.length < 2) { alert('Введите вопрос и минимум 2 варианта'); return; }
+    const { data: msg, error: msgErr } = await supabase.from('messages').insert([{ chat_id: activeChat, sender_id: session.user.id, content: '[POLL]' }]).select().single();
+    if (msgErr || !msg) { alert('Не удалось создать опрос'); return; }
+    await supabase.from('polls').insert([{ message_id: msg.id, question: pollQuestion, options: opts, created_by: session.user.id }]);
+    setShowPollModal(false); setPollQuestion(''); setPollOptions(['', '']);
+  };
+
+  const votePoll = async (pollId, optionIndex) => {
+    const existing = pollVotes.find(v => v.poll_id === pollId && v.user_id === session.user.id);
+    if (existing) {
+      if (existing.option_index === optionIndex) await supabase.from('poll_votes').delete().eq('poll_id', pollId).eq('user_id', session.user.id);
+      else await supabase.from('poll_votes').update({ option_index: optionIndex }).eq('poll_id', pollId).eq('user_id', session.user.id);
+    } else {
+      await supabase.from('poll_votes').insert([{ poll_id: pollId, user_id: session.user.id, option_index: optionIndex }]);
+    }
+  };
+
+  const blockUser = async (userId) => {
+    if (!confirm('Заблокировать этого пользователя?')) return;
+    await supabase.from('blocks').insert([{ owner_id: session.user.id, blocked_id: userId }]);
+    setShowUserProfileModal(false);
+    loadBlocked();
+  };
+
+  const unblockUser = async (userId) => {
+    await supabase.from('blocks').delete().eq('owner_id', session.user.id).eq('blocked_id', userId);
+    loadBlocked();
+  };
+
+  const openProfileOf = (u) => { setViewedProfile(u); setShowUserProfileModal(true); };
+
   const handleMediaUpload = async (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    if (type === 'story') {
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const { data: todays } = await supabase.from('stories').select('id').eq('user_id', session.user.id).gte('created_at', todayStart.toISOString());
+      const limit = isAura ? 3 : 1;
+      if (todays && todays.length >= limit) { alert(`Лимит историй в сутки: ${limit}${isAura ? '' : '. Оформите Аура для увеличения лимита.'}`); e.target.value = ''; return; }
+    }
+
     const safeExt = (file.name.split('.').pop() || 'bin').toLowerCase();
     const name = `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
-    const { error } = await supabase.storage.from('media').upload(name, file, {
-      contentType: file.type || 'application/octet-stream',
-      cacheControl: '3600',
-      upsert: true
-    });
+    const { error } = await supabase.storage.from('media').upload(name, file, { contentType: file.type || 'application/octet-stream', cacheControl: '3600', upsert: true });
     if (error) {
-      // Раньше ошибка молча проглатывалась — поэтому казалось, что "фотки не отправляются"
       alert('Не удалось загрузить файл: ' + error.message + '\nПроверьте, что бакет "media" в Supabase Storage публичный и есть policy на insert для authenticated.');
       e.target.value = '';
       return;
@@ -531,6 +617,7 @@ export default function Home() {
       const { data: emj } = await supabase.from('custom_emojis').select('*').eq('chat_id', activeChat);
       if (emj) setCustomEmojis(emj);
     }
+    else if (type === 'video') await sendMessage('video', `[VIDEO]:${publicUrl}`);
     else await sendMessage('image', `[IMAGE]:${publicUrl}`);
     e.target.value = '';
   };
@@ -545,35 +632,38 @@ export default function Home() {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const name = `voice_${Date.now()}.webm`;
         const { error } = await supabase.storage.from('media').upload(name, audioBlob, { contentType: 'audio/webm', upsert: true });
-        if (!error) {
-          const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(name);
-          sendMessage('voice', `[VOICE]:${publicUrl}`);
-        } else {
-          alert('Не удалось загрузить голосовое: ' + error.message);
-        }
+        if (!error) { const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(name); sendMessage('voice', `[VOICE]:${publicUrl}`); }
+        else alert('Не удалось загрузить голосовое: ' + error.message);
       };
       mediaRecorderRef.current.start(); setIsRecording(true);
     } catch { alert('Микрофон недоступен!'); }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop(); setIsRecording(false);
-    }
-  };
+  const stopRecording = () => { if (mediaRecorderRef.current && isRecording) { mediaRecorderRef.current.stop(); setIsRecording(false); } };
 
   const replyToTicket = async (ticketId) => {
     const text = replyTicketText[ticketId];
     if (!text?.trim()) return;
-    await supabase.from('support_tickets').update({ reply: text, status: 'closed' }).eq('id', ticketId);
+    const { error } = await supabase.from('support_tickets').update({ reply: text, status: 'closed' }).eq('id', ticketId);
+    if (error) { alert('Не удалось отправить ответ: ' + error.message); return; }
     setReplyTicketText(prev => ({ ...prev, [ticketId]: '' }));
+    fetchSupportTickets();
+  };
+
+  const sendSupportMessage = async () => {
+    if (!newSupportMsg.trim()) return;
+    const { error } = await supabase.from('support_tickets').insert({ user_id: session.user.id, message: newSupportMsg });
+    if (error) { alert('Не удалось отправить в поддержку: ' + error.message); return; }
+    setNewSupportMsg('');
     fetchSupportTickets();
   };
 
   const handleAuth = async (type) => {
     setLoading(true);
     if (type === 'signup') {
-      if (!signupUsername || !signupEmail || !password) return alert('Заполните все поля!');
+      if (!signupUsername || !signupEmail || !password) { setLoading(false); return alert('Заполните все поля!'); }
+      const { data: taken } = await supabase.from('profiles').select('id').ilike('username', signupUsername);
+      if (taken && taken.length > 0) { setLoading(false); alert('Этот username уже занят.'); return; }
       const { error } = await supabase.auth.signUp({ email: signupEmail, password, options: { data: { username: signupUsername } } });
       if (error) alert(error.message); else alert('Успешно! Войдите.');
     } else {
@@ -587,10 +677,7 @@ export default function Home() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: prof } = await supabase.from('profiles').select('is_banned').eq('id', user.id).single();
-        if (prof?.is_banned) {
-          await supabase.auth.signOut();
-          alert('Ваш аккаунт заблокирован.');
-        }
+        if (prof?.is_banned) { await supabase.auth.signOut(); alert('Ваш аккаунт заблокирован.'); }
       }
     }
     setLoading(false);
@@ -617,18 +704,27 @@ export default function Home() {
     );
   }
 
-  const isDeveloper = session.user.email === DEV_EMAIL;
+  if (locked) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#030712', fontFamily: 'system-ui, sans-serif', padding: '16px' }}>
+        <div style={{ width: '100%', maxWidth: '320px', padding: '32px 24px', background: theme.bgCard, borderRadius: '24px', border: `1px solid ${theme.border}`, textAlign: 'center', color: '#fff' }}>
+          <div style={{ marginBottom: '10px', color: theme.primary }}><Icons.Lock /></div>
+          <h3 style={{ margin: '0 0 16px' }}>Введите код-пароль</h3>
+          <input autoFocus type="password" inputMode="numeric" value={pinAttempt} onChange={e => setPinAttempt(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '12px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, textAlign: 'center', fontSize: '20px', letterSpacing: '6px', outline: 'none', boxSizing: 'border-box' }} />
+          <button onClick={() => { if (pinAttempt === myProfile?.pin_code) { setLocked(false); setPinAttempt(''); } else alert('Неверный код'); }} style={{ width: '100%', marginTop: '14px', padding: '12px', borderRadius: '12px', background: theme.gradient, border: 'none', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Разблокировать</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', background: '#030712', fontFamily: 'system-ui, sans-serif', color: '#f8fafc', overflow: 'hidden' }}>
-      {/* SIDEBAR */}
       <div style={{ width: (activeChat || isSupportMode) ? '320px' : '100%', display: (activeChat || isSupportMode) ? 'none' : 'flex', flexDirection: 'column', borderRight: `1px solid ${theme.border}`, background: 'rgba(11, 15, 25, 0.85)', backdropFilter: 'blur(16px)', height: '100%' }}>
         <div style={{ padding: '16px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '20px', color: theme.primary, textShadow: `0 0 10px ${theme.glow}` }}>DroJent {isDeveloper && <Icons.Crown />}</h3>
+          <h3 style={{ margin: 0, fontSize: '20px', color: theme.primary, textShadow: `0 0 10px ${theme.glow}` }}>DroJent {isDeveloper && <Icons.Crown />} {isAura && <Icons.Aura />}</h3>
           <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px', cursor: 'pointer' }}>Выйти</button>
         </div>
 
-        {/* Stories — теперь только контакты (+ свои) */}
         <div style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, display: 'flex', gap: '12px', overflowX: 'auto', background: 'rgba(7, 10, 18, 0.6)' }}>
           <label style={{ cursor: 'pointer', flexShrink: 0, textAlign: 'center' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: `2px dashed ${theme.primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.primary }}>➕</div>
@@ -643,12 +739,11 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}`, background: 'rgba(7, 10, 18, 0.8)' }}>
+        <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}`, background: 'rgba(7, 10, 18, 0.8)', overflowX: 'auto' }}>
           <button onClick={() => { setActiveTab('chats'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'chats' ? theme.primary : '#64748b', borderBottom: activeTab === 'chats' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Чаты</button>
           <button onClick={() => { setActiveTab('profile'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'profile' ? theme.primary : '#64748b', borderBottom: activeTab === 'profile' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Профиль</button>
-          {isDeveloper && <button onClick={() => { setActiveTab('tickets'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'tickets' ? theme.primary : '#64748b', borderBottom: activeTab === 'tickets' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Тикеты</button>}
-          {isDeveloper && <button onClick={() => { setActiveTab('users'); setIsSupportMode(false); fetchAllUsers(); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'users' ? theme.primary : '#64748b', borderBottom: activeTab === 'users' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Юзеры</button>}
+          {isDeveloper && <button onClick={() => { setActiveTab('tickets'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'tickets' ? theme.primary : '#64748b', borderBottom: activeTab === 'tickets' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>Тикеты</button>}
+          {isDeveloper && <button onClick={() => { setActiveTab('users'); setIsSupportMode(false); fetchAllUsers(); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'users' ? theme.primary : '#64748b', borderBottom: activeTab === 'users' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>Юзеры</button>}
         </div>
 
         {activeTab === 'profile' ? (
@@ -658,26 +753,52 @@ export default function Home() {
                 {avatarUrl ? <img src={avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="avatar"/> : 'U'}
               </div>
               <label style={{ color: theme.primary, fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>Изменить аватар<input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'avatar')} style={{ display: 'none' }}/></label>
+              {isAura && <div style={{ marginTop: '6px', display: 'inline-block', padding: '3px 10px', borderRadius: '20px', background: 'rgba(192,132,252,0.15)', border: '1px solid #c084fc', color: '#c084fc', fontSize: '11px', fontWeight: 'bold' }}>💠 Аура активна</div>}
             </div>
+
             <div style={{ background: 'rgba(3, 7, 18, 0.6)', padding: '12px', borderRadius: '12px', border: `1px solid ${theme.border}` }}>
               <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Тема оформления:</label>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => setThemeKey('blue')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#0284c7', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>Синий</button>
-                <button onClick={() => setThemeKey('green')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>Зелёный</button>
-                <button onClick={() => setThemeKey('purple')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#9333ea', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>Фиолетовый</button>
+                {Object.entries(THEMES).map(([key, t]) => {
+                  const locked = t.locked && !isAura;
+                  return (
+                    <button key={key} disabled={locked} onClick={() => setThemeKey(key)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: themeKey===key ? `2px solid #fff` : 'none', background: locked ? '#334155' : t.secondary, color: '#fff', cursor: locked ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px', opacity: locked ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      {key === 'blue' ? 'Синий' : key === 'green' ? 'Зелёный' : 'Фиолетовый'} {locked && <Icons.Lock />}
+                    </button>
+                  );
+                })}
               </div>
+              {!isAura && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>Зелёная и фиолетовая темы доступны с Аура 💠</div>}
             </div>
+
             <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Имя (Full Name)" value={editFullName} onChange={e => setEditFullName(e.target.value)} />
             <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Username" value={editUsername} onChange={e => setEditUsername(e.target.value)} />
+            <input type="date" style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} value={editBirthdate} onChange={e => setEditBirthdate(e.target.value)} />
             <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Статус" value={editCustomStatus} onChange={e => setEditCustomStatus(e.target.value)} />
+            <input disabled={!isAura} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box', opacity: isAura ? 1 : 0.5 }} placeholder={isAura ? 'Эмодзи-статус (например 🎮)' : 'Эмодзи-статус — доступно с Аура 💠'} value={editEmojiStatus} onChange={e => setEditEmojiStatus(e.target.value)} maxLength={4} />
+
+            <input type="password" inputMode="numeric" style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder={myProfile?.pin_code ? 'Новый код-пароль (оставьте пустым, чтобы не менять)' : 'Задать код-пароль при входе (4+ цифры)'} value={newPin} onChange={e => setNewPin(e.target.value)} />
+
             <button onClick={saveProfile} style={{ width: '100%', padding: '12px', borderRadius: '10px', background: theme.gradient, color: '#fff', fontWeight: 'bold', cursor: 'pointer', border: 'none' }}>Сохранить профиль</button>
+
+            {!isAura && (
+              <div style={{ background: 'rgba(192,132,252,0.08)', border: '1px solid #c084fc', borderRadius: '12px', padding: '14px' }}>
+                <div style={{ color: '#c084fc', fontWeight: 'bold', marginBottom: '6px' }}>💠 Подписка Аура</div>
+                <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '10px' }}>Зелёная/фиолетовая темы, опросы, эмодзи-статус, до 3 каналов и групп, до 3 историй в сутки.</div>
+                <input style={{ width: '100%', padding: '8px', borderRadius: '8px', background: '#030712', color: '#fff', border: '1px solid #c084fc', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }} placeholder="Промокод" value={promoCodeInput} onChange={e => setPromoCodeInput(e.target.value)} />
+                <button onClick={activatePromo} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'linear-gradient(135deg,#7e22ce,#c084fc)', border: 'none', color: '#fff', fontWeight: 'bold', cursor: 'pointer', marginBottom: '8px' }}>Активировать</button>
+                <button onClick={openBuySupport} style={{ width: '100%', padding: '8px', borderRadius: '8px', background: 'transparent', border: '1px solid #94a3b8', color: '#94a3b8', cursor: 'pointer', fontSize: '12px' }}>Нет промокода? Купить Аура</button>
+              </div>
+            )}
           </div>
         ) : activeTab === 'tickets' ? (
           <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
+            {tickets.length === 0 && <div style={{ color: '#64748b', textAlign: 'center', marginTop: '20px' }}>Тикетов пока нет</div>}
             {tickets.map(t => (
               <div key={t.id} style={{ padding: '12px', background: 'rgba(30,41,59,0.6)', borderRadius: '12px', marginBottom: '10px', border: `1px solid ${theme.border}` }}>
                 <div style={{ color: theme.primary, fontSize: '12px', fontWeight: 'bold' }}>@{t.profiles?.username}</div>
                 <div style={{ color: '#fff', fontSize: '14px', margin: '5px 0' }}>{t.message}</div>
+                {t.reply && <div style={{ color: '#22c55e', fontSize: '12px' }}>Ответ: {t.reply}</div>}
                 {!t.reply && (
                   <div style={{ display: 'flex', gap: '5px' }}>
                     <input style={{ flex: 1, padding: '6px', background: '#000', color: '#fff', border: 'none', borderRadius: '6px' }} value={replyTicketText[t.id] || ''} onChange={e => setReplyTicketText({...replyTicketText, [t.id]: e.target.value})} placeholder="Ответ..." />
@@ -690,17 +811,16 @@ export default function Home() {
         ) : activeTab === 'users' ? (
           <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
             {allUsers.map(u => (
-              <div key={u.id} style={{ padding: '12px', background: 'rgba(30,41,59,0.6)', borderRadius: '12px', marginBottom: '10px', border: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div key={u.id} style={{ padding: '12px', background: 'rgba(30,41,59,0.6)', borderRadius: '12px', marginBottom: '10px', border: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', background: '#2563eb', flexShrink: 0 }}>
                   {u.avatar_url && <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="av"/>}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: '#fff', fontWeight: '600', fontSize: '13px' }}>{u.full_name || u.username} {u.is_online && <span style={{ color: '#22c55e' }}>●</span>}</div>
+                <div style={{ flex: 1, minWidth: '120px' }}>
+                  <div style={{ color: '#fff', fontWeight: '600', fontSize: '13px' }}>{u.full_name || u.username} {u.is_online && <span style={{ color: '#22c55e' }}>●</span>} {u.is_aura && <Icons.Aura />}</div>
                   <div style={{ color: '#94a3b8', fontSize: '11px' }}>@{u.username} {u.is_banned && <span style={{ color: '#f87171' }}>· забанен</span>}</div>
                 </div>
-                <button onClick={() => toggleBanUser(u)} style={{ padding: '6px 10px', borderRadius: '8px', border: `1px solid ${u.is_banned ? '#22c55e' : '#f87171'}`, background: 'transparent', color: u.is_banned ? '#22c55e' : '#f87171', fontSize: '11px', cursor: 'pointer', flexShrink: 0 }}>
-                  {u.is_banned ? 'Разбанить' : 'Забанить'}
-                </button>
+                <button onClick={() => toggleAuraUser(u)} style={{ padding: '6px 10px', borderRadius: '8px', border: `1px solid ${u.is_aura ? '#c084fc' : '#64748b'}`, background: 'transparent', color: u.is_aura ? '#c084fc' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{u.is_aura ? 'Снять Ауру' : 'Дать Ауру'}</button>
+                <button onClick={() => toggleBanUser(u)} style={{ padding: '6px 10px', borderRadius: '8px', border: `1px solid ${u.is_banned ? '#22c55e' : '#f87171'}`, background: 'transparent', color: u.is_banned ? '#22c55e' : '#f87171', fontSize: '11px', cursor: 'pointer' }}>{u.is_banned ? 'Разбанить' : 'Забанить'}</button>
               </div>
             ))}
           </div>
@@ -733,8 +853,8 @@ export default function Home() {
                         {u.is_online && <span style={{ position: 'absolute', bottom: 0, right: 0, width: '10px', height: '10px', borderRadius: '50%', background: '#22c55e', border: '2px solid #0b0f19' }} />}
                       </div>
                       <div>
-                        <div style={{ color: '#fff', display: 'flex', gap: '5px', fontWeight: '600' }}>
-                          {u.full_name || u.username} {u.status_badge === '👑 Developer' && <Icons.Crown />}
+                        <div style={{ color: '#fff', display: 'flex', gap: '5px', fontWeight: '600', alignItems: 'center' }}>
+                          {u.full_name || u.username} {u.emoji_status} {u.status_badge === '👑 Developer' && <Icons.Crown />} {u.is_aura && <Icons.Aura />}
                         </div>
                         <div style={{ color: '#94a3b8', fontSize: '11px' }}>@{u.username}</div>
                       </div>
@@ -753,7 +873,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* MAIN CHAT AREA */}
       <div style={{ flex: 1, display: (!activeChat && !isSupportMode) ? 'none' : 'flex', flexDirection: 'column', background: '#030712' }}>
         {isSupportMode ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -771,7 +890,7 @@ export default function Home() {
             </div>
             <div style={{ padding: '10px', display: 'flex', gap: '10px', borderTop: `1px solid ${theme.border}` }}>
               <input style={{ flex: 1, padding: '10px 16px', borderRadius: '20px', background: '#1e293b', color: '#fff', border: 'none', outline: 'none' }} value={newSupportMsg} onChange={e => setNewSupportMsg(e.target.value)} placeholder="Опишите проблему..." />
-              <button onClick={() => { if(newSupportMsg) { supabase.from('support_tickets').insert({ user_id: session.user.id, message: newSupportMsg }); setNewSupportMsg(''); fetchSupportTickets(); } }} style={{ padding: '10px 18px', borderRadius: '20px', background: theme.primary, border: 'none', cursor: 'pointer' }}><Icons.Send /></button>
+              <button onClick={sendSupportMessage} style={{ padding: '10px 18px', borderRadius: '20px', background: theme.primary, border: 'none', cursor: 'pointer' }}><Icons.Send /></button>
             </div>
           </div>
         ) : activeChat ? (
@@ -780,7 +899,7 @@ export default function Home() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <button onClick={() => { setActiveChat(null); setActiveUser(null); }} style={{ background: 'transparent', border: 'none', color: theme.primary, cursor: 'pointer' }}><Icons.Back /></button>
                 <div>
-                  <h3 onClick={() => { if(isChatAdmin) setShowAdminModal(true); else if(activeUser) setShowUserProfileModal(true); }} style={{ margin: 0, color: theme.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <h3 onClick={() => { if (activeChatData?.type === 'channel' || activeChatData?.type === 'group') openAdminPanel(); else if (activeUser) openProfileOf(activeUser); }} style={{ margin: 0, color: theme.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
                     {activeChatData?.type === 'group' ? `👥 ${activeChatData.name}` : activeChatData?.type === 'channel' ? `📢 ${activeChatData.name}` : (activeUser?.id === session.user.id ? '🔖 Избранное' : activeUser?.full_name || activeUser?.username)}
                     {activeChatData?.is_verified && '✅'}
                     {activeUser?.status_badge === '👑 Developer' && <Icons.Crown />}
@@ -788,26 +907,23 @@ export default function Home() {
                   {(activeChatData?.type === 'group' || activeChatData?.type === 'channel') && (
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{subscriberCount} {activeChatData?.type === 'channel' ? 'подписчиков' : 'участников'}</div>
                   )}
-                  {typingUsers.length > 0 && (
-                    <div style={{ fontSize: '11px', color: theme.primary }}>{typingUsers.map(t => t.profiles?.username).join(', ')} печатает...</div>
-                  )}
+                  {typingUsers.length > 0 && <div style={{ fontSize: '11px', color: theme.primary }}>{typingUsers.map(t => t.profiles?.username).join(', ')} печатает...</div>}
                   {activeChatData?.type === 'dm' && activeUser && activeUser.id !== session.user.id && typingUsers.length === 0 && (
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{activeUser.is_online ? 'в сети' : 'не в сети'}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{activeUser.is_online ? 'в сети' : `был(а) в сети ${timeAgo(activeUser.last_seen)}`}</div>
                   )}
                 </div>
               </div>
-              {(activeChatData?.type === 'dm' || isChatAdmin) && (
-                <button onClick={deleteChat} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><Icons.Trash /></button>
+              {(activeChatData?.type === 'dm' || activeChatData?.type === 'group' || activeChatData?.type === 'channel') && (
+                <button onClick={deleteChat} title={isCreator ? 'Удалить' : 'Отписаться'} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><Icons.Trash /></button>
               )}
             </div>
 
-            {/* Закреплённое сообщение — теперь можно открепить */}
             {pinnedMsgData && (
               <div style={{ padding: '8px 16px', background: 'rgba(56, 189, 248, 0.1)', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: theme.primary }}>
                 <Icons.Pin />
                 <span style={{ fontWeight: 'bold' }}>Закреплено:</span>
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, color: '#fff' }}>{pinnedMsgData.content}</span>
-                <button onClick={unpinMessage} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '13px' }}>✖</button>
+                {isCreator && <button onClick={unpinMessage} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '13px' }}>✖</button>}
               </div>
             )}
 
@@ -817,25 +933,47 @@ export default function Home() {
                 const rcts = reactions.filter(r => r.message_id === msg.id);
                 return (
                   <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
-                    <div onClick={() => setSelectedMsgForMenu(msg)} style={{ background: isMe ? theme.gradient : 'rgba(30, 41, 59, 0.75)', padding: '10px 14px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', color: '#fff', cursor: 'pointer', border: isMe ? 'none' : `1px solid ${theme.border}` }}>
-                      {msg.content.startsWith('[IMAGE]:') ? <img src={msg.content.replace('[IMAGE]:','')} style={{maxWidth:'100%', borderRadius:'8px'}} alt="media"/> : msg.content.startsWith('[VOICE]:') ? <audio controls src={msg.content.replace('[VOICE]:','')} /> : msg.content}
+                    <div onClick={() => msg.content !== '[POLL]' && setSelectedMsgForMenu(msg)} style={{ background: isMe ? theme.gradient : 'rgba(30, 41, 59, 0.75)', padding: '10px 14px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', color: '#fff', cursor: msg.content === '[POLL]' ? 'default' : 'pointer', border: isMe ? 'none' : `1px solid ${theme.border}` }}>
+                      {msg.content === '[POLL]' ? (() => {
+                        const poll = polls.find(p => p.message_id === msg.id);
+                        if (!poll) return <span style={{ color: '#94a3b8' }}>📊 Опрос загружается...</span>;
+                        const votes = pollVotes.filter(v => v.poll_id === poll.id);
+                        const total = votes.length;
+                        const myVote = votes.find(v => v.user_id === session.user.id);
+                        return (
+                          <div style={{ minWidth: '220px' }}>
+                            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>📊 {poll.question}</div>
+                            {poll.options.map((opt, idx) => {
+                              const cnt = votes.filter(v => v.option_index === idx).length;
+                              const pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
+                              const picked = myVote?.option_index === idx;
+                              return (
+                                <div key={idx} onClick={(e) => { e.stopPropagation(); votePoll(poll.id, idx); }} style={{ position: 'relative', marginBottom: '6px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(0,0,0,0.25)', cursor: 'pointer', overflow: 'hidden', border: picked ? `1px solid ${theme.primary}` : '1px solid transparent' }}>
+                                  <div style={{ position: 'absolute', inset: 0, width: `${pct}%`, background: 'rgba(56,189,248,0.25)' }} />
+                                  <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>{picked ? '✅ ' : ''}{opt}</span>
+                                    <span style={{ opacity: 0.8, fontSize: '12px' }}>{pct}%</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>{total} голосов</div>
+                          </div>
+                        );
+                      })() : msg.content.startsWith('[IMAGE]:') ? <img src={msg.content.replace('[IMAGE]:','')} style={{maxWidth:'100%', borderRadius:'8px'}} alt="media"/>
+                        : msg.content.startsWith('[VIDEO]:') ? <video controls src={msg.content.replace('[VIDEO]:','')} style={{maxWidth:'100%', borderRadius:'8px'}} />
+                        : msg.content.startsWith('[VOICE]:') ? <audio controls src={msg.content.replace('[VOICE]:','')} /> : msg.content}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
                         {rcts.length > 0 && (
                           <div style={{ display: 'flex', gap: '5px' }}>
                             {rcts.map(r => r.emoji.startsWith('http') ? <img key={r.id} src={r.emoji} alt="emoji" style={{ width: '16px', height: '16px' }}/> : <span key={r.id}>{r.emoji}</span>)}
                           </div>
                         )}
-                        {isMe && (
-                          <span style={{ marginLeft: 'auto', opacity: 0.8 }}>
-                            {msg.is_read ? <Icons.Read /> : <Icons.Sent />}
-                          </span>
-                        )}
+                        {isMe && <span style={{ marginLeft: 'auto', opacity: 0.8 }}>{msg.is_read ? <Icons.Read /> : <Icons.Sent />}</span>}
                       </div>
                     </div>
-                    {activeChatData?.type === 'channel' && (
-                      <button onClick={() => setOpenCommentsForMsg(msg)} style={{ marginTop: '4px', background: 'transparent', border: 'none', color: theme.primary, fontSize: '11px', cursor: 'pointer' }}>
-                        💬 Комментарии
-                      </button>
+                    {activeChatData?.type === 'channel' && msg.content !== '[POLL]' && (
+                      <button onClick={() => setOpenCommentsForMsg(msg)} style={{ marginTop: '4px', background: 'transparent', border: 'none', color: theme.primary, fontSize: '11px', cursor: 'pointer' }}>💬 Комментарии</button>
                     )}
                   </div>
                 );
@@ -843,12 +981,16 @@ export default function Home() {
             </div>
 
             {activeChatData?.type === 'channel' && activeChatData.owner_id !== session.user.id ? (
-              <div style={{ padding: '15px', textAlign: 'center', background: '#0b0f19', color: '#94a3b8' }}>Только владелец пишет в канал</div>
+              <div style={{ padding: '15px', textAlign: 'center', background: '#0b0f19', color: '#94a3b8' }}>Только создатель пишет в канал</div>
             ) : (
-              <form onSubmit={e => { e.preventDefault(); sendMessage(); }} style={{ padding: '10px', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0, borderTop: `1px solid ${theme.border}` }}>
+              <form onSubmit={e => { e.preventDefault(); sendMessage(); }} style={{ padding: '10px', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0, borderTop: `1px solid ${theme.border}`, flexWrap: 'wrap' }}>
                 <label style={{ cursor: 'pointer', padding: '10px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '50%', color: theme.primary }}><Icons.Camera /><input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'img')} style={{display:'none'}}/></label>
+                <label style={{ cursor: 'pointer', padding: '10px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '50%', color: theme.primary }}><Icons.Video /><input type="file" accept="video/*" onChange={(e) => handleMediaUpload(e, 'video')} style={{display:'none'}}/></label>
+                {(activeChatData?.type === 'group' || activeChatData?.type === 'channel') && (
+                  <button type="button" onClick={() => setShowPollModal(true)} title={isAura ? 'Создать опрос' : 'Опросы доступны с Аура'} style={{ padding: '10px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '50%', color: isAura ? theme.primary : '#64748b', border: 'none', cursor: 'pointer' }}>📊</button>
+                )}
                 <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '10px', background: isRecording ? '#ef4444' : 'rgba(30, 41, 59, 0.8)', border: 'none', borderRadius: '50%', color: theme.primary, cursor: 'pointer' }}>{isRecording ? <Icons.Stop/> : <Icons.Mic/>}</button>
-                <input style={{ flex: 1, padding: '12px', borderRadius: '20px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none' }} value={newMessage} onChange={e => handleTyping(e.target.value)} placeholder="Сообщение..." />
+                <input style={{ flex: 1, minWidth: '120px', padding: '12px', borderRadius: '20px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none' }} value={newMessage} onChange={e => handleTyping(e.target.value)} placeholder="Сообщение..." />
                 <button type="submit" style={{ padding: '12px 18px', borderRadius: '20px', background: theme.gradient, border: 'none', cursor: 'pointer' }}><Icons.Send /></button>
               </form>
             )}
@@ -856,7 +998,6 @@ export default function Home() {
         ) : null}
       </div>
 
-      {/* Предпросмотр канала перед подпиской */}
       {previewChat && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div style={{ background: '#0b0f19', padding: '24px', borderRadius: '20px', width: '100%', maxWidth: '320px', border: `1px solid ${theme.border}`, textAlign: 'center' }}>
@@ -872,7 +1013,22 @@ export default function Home() {
         </div>
       )}
 
-      {/* Окно комментариев */}
+      {showPollModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '20px', width: '100%', maxWidth: '320px', border: `1px solid ${theme.border}` }}>
+            <h3 style={{ color: theme.primary, marginTop: 0 }}>📊 Новый опрос</h3>
+            {!isAura && <div style={{ color: '#f87171', fontSize: '12px', marginBottom: '10px' }}>Опросы доступны только с Аура 💠</div>}
+            <input value={pollQuestion} onChange={e => setPollQuestion(e.target.value)} placeholder="Вопрос" style={{ width: '100%', padding: '8px', marginBottom: '8px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px', boxSizing: 'border-box' }} />
+            {pollOptions.map((opt, idx) => (
+              <input key={idx} value={opt} onChange={e => setPollOptions(prev => prev.map((o, i) => i === idx ? e.target.value : o))} placeholder={`Вариант ${idx + 1}`} style={{ width: '100%', padding: '8px', marginBottom: '8px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px', boxSizing: 'border-box' }} />
+            ))}
+            {pollOptions.length < 6 && <button onClick={() => setPollOptions(prev => [...prev, ''])} style={{ width: '100%', padding: '6px', marginBottom: '10px', background: 'transparent', border: `1px dashed ${theme.border}`, color: theme.primary, borderRadius: '8px', cursor: 'pointer' }}>➕ Вариант</button>}
+            <button onClick={createPoll} disabled={!isAura} style={{ width: '100%', padding: '10px', background: isAura ? theme.gradient : '#334155', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: isAura ? 'pointer' : 'not-allowed' }}>Создать</button>
+            <button onClick={() => setShowPollModal(false)} style={{ width: '100%', padding: '8px', marginTop: '8px', background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer' }}>Отмена</button>
+          </div>
+        </div>
+      )}
+
       {openCommentsForMsg && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div style={{ background: '#0b0f19', borderRadius: '20px', border: `1px solid ${theme.border}`, width: '100%', maxWidth: '360px', height: '80vh', display: 'flex', flexDirection: 'column', padding: '16px' }}>
@@ -882,8 +1038,11 @@ export default function Home() {
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {commentsList.map(c => (
-                <div key={c.id} style={{ background: 'rgba(30,41,59,0.5)', padding: '8px 12px', borderRadius: '10px' }}>
-                  <div style={{ fontSize: '11px', color: theme.primary, fontWeight: 'bold' }}>@{c.profiles?.username}</div>
+                <div key={c.id} onClick={() => c.profiles && openProfileOf(c.profiles)} style={{ background: 'rgba(30,41,59,0.5)', padding: '8px 12px', borderRadius: '10px', cursor: c.profiles ? 'pointer' : 'default' }}>
+                  <div style={{ fontSize: '11px', color: theme.primary, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    @{c.profiles?.username}
+                    {c.user_id === activeChatData?.owner_id && <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', fontSize: '10px' }}>Создатель</span>}
+                  </div>
                   <div style={{ fontSize: '13px', color: '#fff' }}>{c.content}</div>
                 </div>
               ))}
@@ -896,23 +1055,43 @@ export default function Home() {
         </div>
       )}
 
-      {/* Админ-панель канала / группы */}
+      {/* Админ-панель канала/группы — только для создателя: имя, юзернейм, аватар, публичность, подписчики */}
       {showAdminModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '20px', width: '300px', border: `1px solid ${theme.border}` }}>
-            <h3 style={{ color: theme.primary, marginTop: 0 }}>Админ-панель</h3>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '20px', width: '320px', maxHeight: '85vh', overflowY: 'auto', border: `1px solid ${theme.border}` }}>
+            <h3 style={{ color: theme.primary, marginTop: 0 }}>{isCreator ? 'Админ-панель' : 'О чате'}</h3>
             <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-              <label style={{ color: theme.primary, fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>
-                📷 Изменить аватарку канала
-                <input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'comm_avatar')} style={{ display: 'none' }} />
-              </label>
+              <div style={{ width: '64px', height: '64px', borderRadius: '50%', margin: '0 auto 8px', overflow: 'hidden', background: '#334155' }}>
+                {communityAvatar && <img src={communityAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="ch"/>}
+              </div>
+              {isCreator && <label style={{ color: theme.primary, fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>📷 Изменить аватарку<input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'comm_avatar')} style={{ display: 'none' }} /></label>}
             </div>
-            <input value={activeChatData?.name || ''} onChange={(e) => setActiveChatData({...activeChatData, name: e.target.value})} style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} placeholder="Название" />
-            <input value={activeChatData?.description || ''} onChange={(e) => setActiveChatData({...activeChatData, description: e.target.value})} style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} placeholder="Описание" />
-            <input value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Username участника" style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} />
-            <button onClick={addMemberToComm} style={{ width: '100%', padding: '8px', background: theme.primary, border: 'none', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer', fontWeight: 'bold' }}>Добавить участника</button>
-            <button onClick={() => { if (newMemberName) promoteToAdmin(newMemberName); }} style={{ width: '100%', padding: '8px', background: 'rgba(245,158,11,0.15)', border: '1px solid #f59e0b', color: '#f59e0b', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer', fontWeight: 'bold' }}>Назначить админом (введи username выше)</button>
-            <button onClick={updateCommunity} style={{ width: '100%', padding: '8px', background: theme.gradient, border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>Сохранить изменения</button>
+            {isCreator ? (
+              <>
+                <input value={activeChatData?.name || ''} onChange={(e) => setActiveChatData({...activeChatData, name: e.target.value})} style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px', boxSizing: 'border-box' }} placeholder="Название" />
+                <input value={activeChatData?.description || ''} onChange={(e) => setActiveChatData({...activeChatData, description: e.target.value})} style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px', boxSizing: 'border-box' }} placeholder="Описание" />
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', color: '#cbd5e1', fontSize: '13px' }}>
+                  <input type="checkbox" checked={!!activeChatData?.is_public} onChange={(e) => setActiveChatData({...activeChatData, is_public: e.target.checked})} /> Публичный (виден в поиске)
+                </label>
+                <button onClick={updateCommunity} style={{ width: '100%', padding: '8px', background: theme.gradient, border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 'bold', marginBottom: '12px' }}>Сохранить изменения</button>
+                <input value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Username участника" style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px', boxSizing: 'border-box' }} />
+                <button onClick={addMemberToComm} style={{ width: '100%', padding: '8px', background: theme.primary, border: 'none', borderRadius: '8px', marginBottom: '14px', cursor: 'pointer', fontWeight: 'bold' }}>Добавить участника</button>
+                <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '6px', fontWeight: 'bold' }}>Подписчики ({subscribersList.length})</div>
+                <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                  {subscribersList.map(s => (
+                    <div key={s.user_id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <span onClick={() => openProfileOf(s.profiles)} style={{ flex: 1, color: '#fff', fontSize: '13px', cursor: 'pointer' }}>@{s.profiles?.username}{s.user_id === activeChatData?.owner_id && ' 👑'}</span>
+                      {s.user_id !== activeChatData?.owner_id && <button onClick={() => removeSubscriber(s.user_id)} style={{ background: 'transparent', border: '1px solid #f87171', color: '#f87171', borderRadius: '6px', fontSize: '11px', padding: '3px 8px', cursor: 'pointer' }}>Удалить</button>}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ color: '#cbd5e1', fontSize: '13px' }}>
+                <p>{activeChatData?.description}</p>
+                <p style={{ color: '#94a3b8' }}>{subscriberCount} подписчиков</p>
+              </div>
+            )}
             <button onClick={() => setShowAdminModal(false)} style={{ width: '100%', padding: '8px', marginTop: '10px', background: 'transparent', color: '#f87171', border: 'none', cursor: 'pointer' }}>Закрыть</button>
           </div>
         </div>
@@ -925,25 +1104,23 @@ export default function Home() {
               <button onClick={() => setCommunityType('group')} style={{ flex: 1, padding: '8px', background: communityType==='group'?theme.primary:'#1e293b', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>👥 Группа</button>
               <button onClick={() => setCommunityType('channel')} style={{ flex: 1, padding: '8px', background: communityType==='channel'?theme.primary:'#1e293b', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>📢 Канал</button>
             </div>
-            <input value={communityName} onChange={e => setCommunityName(e.target.value)} placeholder="Название..." style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} />
+            <input value={communityName} onChange={e => setCommunityName(e.target.value)} placeholder="Название..." style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px', boxSizing: 'border-box' }} />
+            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '10px' }}>Лимит: {isAura ? 3 : 1} на аккаунт{!isAura && ' (Аура — до 3)'}</div>
             <button onClick={createCommunity} style={{ width: '100%', padding: '10px', background: theme.gradient, color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Создать</button>
             <button onClick={() => setShowCreateCommunityModal(false)} style={{ width: '100%', padding: '8px', marginTop: '5px', background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer' }}>Отмена</button>
           </div>
         </div>
       )}
 
-      {/* Меню взаимодействия с сообщением */}
       {selectedMsgForMenu && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#0b0f19', padding: '15px', borderRadius: '20px', width: '270px', border: `1px solid ${theme.border}` }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
               {REACTION_EMOJIS.map(em => <span key={em} onClick={() => toggleReaction(selectedMsgForMenu.id, em)} style={{ fontSize: '20px', cursor: 'pointer' }}>{em}</span>)}
               {customEmojis.map(ce => <img key={ce.id} onClick={() => toggleReaction(selectedMsgForMenu.id, ce.image_url)} src={ce.image_url} alt={ce.name} style={{ width: '22px', height: '22px', cursor: 'pointer' }}/>)}
-              <label style={{ cursor: 'pointer', color: theme.primary, fontSize: '18px' }}>
-                ➕<input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'emoji')} style={{ display: 'none' }}/>
-              </label>
+              <label style={{ cursor: 'pointer', color: theme.primary, fontSize: '18px' }}>➕<input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'emoji')} style={{ display: 'none' }}/></label>
             </div>
-            <button onClick={() => pinMessage(selectedMsgForMenu.id)} style={{ width: '100%', padding: '10px', background: 'rgba(30,41,59,0.8)', color: '#fff', border: 'none', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>📌 Закрепить</button>
+            {isCreator && <button onClick={() => pinMessage(selectedMsgForMenu.id)} style={{ width: '100%', padding: '10px', background: 'rgba(30,41,59,0.8)', color: '#fff', border: 'none', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>📌 Закрепить</button>}
             <button onClick={() => { setReplyingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }} style={{ width: '100%', padding: '10px', background: 'rgba(30,41,59,0.8)', color: '#fff', border: 'none', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>💬 Ответить</button>
             {canDeleteMessage(selectedMsgForMenu) && (
               <button onClick={() => deleteMessage(selectedMsgForMenu.id)} style={{ width: '100%', padding: '10px', background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid #f87171', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>🗑️ Удалить</button>
@@ -960,13 +1137,24 @@ export default function Home() {
         </div>
       )}
 
-      {showUserProfileModal && activeUser && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '20px', textAlign: 'center', color: '#fff', border: `1px solid ${theme.border}` }}>
-            <h2>{activeUser.full_name || activeUser.username} {activeUser.status_badge === '👑 Developer' && <Icons.Crown />}</h2>
-            <p style={{ color: theme.primary }}>@{activeUser.username}</p>
-            <p style={{ fontStyle: 'italic', color: '#94a3b8' }}>«{activeUser.custom_status || 'Без статуса'}»</p>
-            <button onClick={() => setShowUserProfileModal(false)} style={{ padding: '8px 20px', background: theme.primary, border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Закрыть</button>
+      {showUserProfileModal && viewedProfile && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', zIndex: 8000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '20px', textAlign: 'center', color: '#fff', border: `1px solid ${theme.border}`, width: '100%', maxWidth: '300px' }}>
+            <div style={{ width: '70px', height: '70px', borderRadius: '50%', margin: '0 auto 10px', overflow: 'hidden', background: '#334155' }}>
+              {viewedProfile.avatar_url && <img src={viewedProfile.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="av"/>}
+            </div>
+            <h2 style={{ margin: '0 0 4px' }}>{viewedProfile.full_name || viewedProfile.username} {viewedProfile.status_badge === '👑 Developer' && <Icons.Crown />} {viewedProfile.is_aura && <Icons.Aura />} {viewedProfile.emoji_status}</h2>
+            <p style={{ color: theme.primary, margin: '0 0 6px' }}>@{viewedProfile.username}</p>
+            {viewedProfile.custom_status && <p style={{ fontStyle: 'italic', color: '#94a3b8', margin: '0 0 6px' }}>«{viewedProfile.custom_status}»</p>}
+            {viewedProfile.id !== session.user.id && <p style={{ fontSize: '12px', color: '#94a3b8' }}>{viewedProfile.is_online ? 'в сети' : `был(а) в сети ${timeAgo(viewedProfile.last_seen)}`}</p>}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              {viewedProfile.id !== session.user.id && (
+                blockedIds.includes(viewedProfile.id)
+                  ? <button onClick={() => unblockUser(viewedProfile.id)} style={{ flex: 1, padding: '8px', background: 'transparent', border: '1px solid #22c55e', color: '#22c55e', borderRadius: '8px', cursor: 'pointer' }}>Разблокировать</button>
+                  : <button onClick={() => blockUser(viewedProfile.id)} style={{ flex: 1, padding: '8px', background: 'transparent', border: '1px solid #f87171', color: '#f87171', borderRadius: '8px', cursor: 'pointer' }}>Заблокировать</button>
+              )}
+              <button onClick={() => setShowUserProfileModal(false)} style={{ flex: 1, padding: '8px 20px', background: theme.primary, border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Закрыть</button>
+            </div>
           </div>
         </div>
       )}
