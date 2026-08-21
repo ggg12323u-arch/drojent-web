@@ -1,4 +1,5 @@
 'use client';
+
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -8,6 +9,34 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const DEV_EMAIL = 'ggg12323u@gmail.com';
 const REACTION_EMOJIS = ['🔥', '❤️', '👍', '😂', '😮', '😢'];
+
+// Палитры тем
+const THEMES = {
+  blue: {
+    primary: '#38bdf8',
+    secondary: '#2563eb',
+    glow: 'rgba(56, 189, 248, 0.4)',
+    border: 'rgba(56, 189, 248, 0.3)',
+    bgCard: 'rgba(15, 23, 42, 0.75)',
+    gradient: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)'
+  },
+  green: {
+    primary: '#22c55e',
+    secondary: '#16a34a',
+    glow: 'rgba(34, 197, 94, 0.4)',
+    border: 'rgba(34, 197, 94, 0.3)',
+    bgCard: 'rgba(6, 78, 59, 0.65)',
+    gradient: 'linear-gradient(135deg, #15803d 0%, #22c55e 100%)'
+  },
+  purple: {
+    primary: '#c084fc',
+    secondary: '#9333ea',
+    glow: 'rgba(192, 132, 252, 0.4)',
+    border: 'rgba(192, 132, 252, 0.3)',
+    bgCard: 'rgba(88, 28, 135, 0.65)',
+    gradient: 'linear-gradient(135deg, #7e22ce 0%, #c084fc 100%)'
+  }
+};
 
 const Icons = {
   Back: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>,
@@ -29,7 +58,10 @@ export default function Home() {
   const [signupEmail, setSignupEmail] = useState('');
 
   const [myProfile, setMyProfile] = useState(null);
-  const [activeTab, setActiveTab] = useState('chats');
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'profile' | 'tickets'
+  const [themeKey, setThemeKey] = useState('blue'); // 'blue' | 'green' | 'purple'
+  const theme = THEMES[themeKey];
+
   const [editFullName, setEditFullName] = useState('');
   const [editUsername, setEditUsername] = useState('');
   const [editBirthdate, setEditBirthdate] = useState('');
@@ -48,29 +80,43 @@ export default function Home() {
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [showCreateCommunityModal, setShowCreateCommunityModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
+
   const [communityType, setCommunityType] = useState('group');
   const [communityName, setCommunityName] = useState('');
   const [communityDesc, setCommunityDesc] = useState('');
+  const [communityAvatar, setCommunityAvatar] = useState('');
   const [newMemberName, setNewMemberName] = useState('');
-  const [participants, setParticipants] = useState([]);
 
+  // Комментарии к постам в каналах
+  const [openCommentsForMsg, setOpenCommentsForMsg] = useState(null);
+  const [commentsList, setCommentsList] = useState([]);
+  const [newCommentText, setNewCommentText] = useState('');
+
+  // Поддержка
   const [tickets, setTickets] = useState([]);
-  const [mySupportMessages, setMySupportMessages] = useState('');
+  const [mySupportMessages, setMySupportMessages] = useState([]);
+  const [newSupportMsg, setNewSupportMsg] = useState('');
   const [isSupportMode, setIsSupportMode] = useState(false);
   const [replyTicketText, setReplyTicketText] = useState({});
 
+  // Stories
   const [stories, setStories] = useState([]);
   const [activeStory, setActiveStory] = useState(null);
+
+  // Сообщения
   const [messages, setMessages] = useState([]);
   const [reactions, setReactions] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [typing, setTyping] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const [editingMsg, setEditingMsg] = useState(null);
   const [replyingMsg, setReplyingMsg] = useState(null);
+  const [forwardingMsg, setForwardingMsg] = useState(null);
   const [selectedMsgForMenu, setSelectedMsgForMenu] = useState(null);
+
   const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const messagesContainerRef = useRef(null);
 
   useEffect(() => {
@@ -81,7 +127,7 @@ export default function Home() {
 
   const scrollToBottom = () => {
     if (messagesContainerRef.current) {
-        messagesContainerRef.current.scrollTo(0, messagesContainerRef.current.scrollHeight);
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   };
 
@@ -98,66 +144,215 @@ export default function Home() {
     }
   };
 
-  // Сториз только для контактов (у кого есть общие чаты)
-  const fetchContactStories = async () => {
-    if (!session) return;
-    const { data: chats } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
-    const chatIds = chats?.map(c => c.chat_id) || [];
-    const { data: parts } = await supabase.from('chat_participants').select('user_id').in('chat_id', chatIds);
-    const contactIds = [...new Set(parts?.map(p => p.user_id) || [])];
-    const yesterday = new Date(Date.now() - 86400000).toISOString();
-    const { data } = await supabase.from('stories').select('*, profiles(username, avatar_url)').in('user_id', contactIds).gte('created_at', yesterday).order('created_at', { ascending: false });
+  const fetchStories = async () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase.from('stories').select('*, profiles(username, avatar_url)').gte('created_at', yesterday).order('created_at', { ascending: false });
     if (data) setStories(data);
+  };
+
+  const fetchSupportTickets = async () => {
+    if (!session) return;
+    if (session.user.email === DEV_EMAIL) {
+      const { data } = await supabase.from('support_tickets').select('*, profiles(username, avatar_url)').order('created_at', { ascending: false });
+      if (data) setTickets(data);
+    } else {
+      const { data } = await supabase.from('support_tickets').select('*').eq('user_id', session.user.id).order('created_at', { ascending: true });
+      if (data) setMySupportMessages(data);
+    }
   };
 
   const fetchMyChats = async () => {
     if (!session) return;
-    const { data: parts } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id).eq('is_banned', false);
+    const { data: parts } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
     if (parts && parts.length > 0) {
       const chatIds = parts.map(p => p.chat_id);
       const { data: chatsData } = await supabase.from('chats').select('*').in('id', chatIds);
-      setMyChats(chatsData || []);
-    }
+      const { data: allParts } = await supabase.from('chat_participants').select('chat_id, user_id, profiles(id, username, full_name, avatar_url, status_badge, custom_status)').in('chat_id', chatIds);
+      
+      if (chatsData) {
+        const formatted = chatsData.map(c => {
+          if (c.type === 'group' || c.type === 'channel') return { chat_id: c.id, isGroupOrChannel: true, chatDetails: c };
+          const p = allParts?.filter(x => x.chat_id === c.id) || [];
+          if (p.length === 1 && p[0].user_id === session.user.id) return { chat_id: c.id, profiles: { id: session.user.id, username: 'Избранное', avatar_url: myProfile?.avatar_url, custom_status: 'Заметки' } };
+          const partner = p.find(x => x.user_id !== session.user.id);
+          return partner || null;
+        }).filter(Boolean);
+        setMyChats(formatted);
+      }
+    } else setMyChats([]);
   };
 
   useEffect(() => {
     loadProfile();
     if (session) {
-      fetchContactStories();
+      fetchStories();
+      fetchSupportTickets();
       fetchMyChats();
     }
   }, [session]);
 
-  // Realtime чата с индикацией прочтения и печати
   useEffect(() => {
-    if (!activeChat) return;
-
-    const loadChatData = async () => {
-      const { data: chat } = await supabase.from('chats').select('*').eq('id', activeChat).single();
-      setActiveChatData(chat);
-      const { data: msgs } = await supabase.from('messages').select('*').eq('chat_id', activeChat).order('created_at', { ascending: true });
-      setMessages(msgs || []);
-      const { data: parts } = await supabase.from('chat_participants').select('*, profiles(*)').eq('chat_id', activeChat);
-      setParticipants(parts || []);
-      setTimeout(scrollToBottom, 150);
+    if (!session) return;
+    const search = async () => {
+      if (!searchQuery.trim()) { setSearchResults([]); setPublicCommunityResults([]); return; }
+      const { data: u } = await supabase.from('profiles').select('*').ilike('username', `%${searchQuery}%`);
+      if (u) setSearchResults(u);
+      const { data: c } = await supabase.from('chats').select('*').eq('is_public', true).ilike('name', `%${searchQuery}%`);
+      if (c) setPublicCommunityResults(c);
     };
+    const t = setTimeout(search, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery, session]);
 
-    loadChatData();
-
+  useEffect(() => {
+    if (!activeChat) { setMessages([]); setReactions([]); setActiveChatData(null); setPinnedMsgData(null); return; }
+    const loadChat = async () => {
+      const { data: chat } = await supabase.from('chats').select('*').eq('id', activeChat).single();
+      if (chat) {
+        setActiveChatData(chat);
+        setCommunityAvatar(chat.avatar_url || '');
+        if (chat.pinned_message_id) {
+          const { data: pin } = await supabase.from('messages').select('*').eq('id', chat.pinned_message_id).single();
+          if (pin) setPinnedMsgData(pin);
+        } else {
+          setPinnedMsgData(null);
+        }
+      }
+      const { data: msgs } = await supabase.from('messages').select('*').eq('chat_id', activeChat).order('created_at', { ascending: true });
+      if (msgs) { 
+        setMessages(msgs); 
+        setTimeout(scrollToBottom, 150); 
+        const { data: r } = await supabase.from('message_reactions').select('*').in('message_id', msgs.map(m => m.id));
+        if (r) setReactions(r);
+      }
+      await supabase.from('messages').update({ is_read: true }).eq('chat_id', activeChat).neq('sender_id', session.user.id);
+    };
+    loadChat();
     const chan = supabase.channel(`chat_${activeChat}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${activeChat}` }, loadChatData)
-      .on('broadcast', { event: 'typing' }, (p) => { setTyping(p.payload.user); setTimeout(() => setTyping(null), 2000); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${activeChat}` }, loadChat)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, loadChat)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `id=eq.${activeChat}` }, loadChat)
       .subscribe();
+    return () => { supabase.removeChannel(chan); };
+  }, [activeChat, session]);
 
-    return () => supabase.removeChannel(chan);
-  }, [activeChat]);
+  // Загрузка комментариев
+  useEffect(() => {
+    if (!openCommentsForMsg) { setCommentsList([]); return; }
+    const loadComments = async () => {
+      const { data } = await supabase.from('channel_comments').select('*, profiles(username, avatar_url)').eq('message_id', openCommentsForMsg.id).order('created_at', { ascending: true });
+      if (data) setCommentsList(data);
+    };
+    loadComments();
+  }, [openCommentsForMsg]);
 
-  const sendMessage = async (type = 'text', content = '') => {
-    const finalContent = content || newMessage;
-    if (!finalContent.trim() && type === 'text') return;
+  const sendComment = async () => {
+    if (!newCommentText.trim() || !openCommentsForMsg) return;
+    await supabase.from('channel_comments').insert([{ message_id: openCommentsForMsg.id, user_id: session.user.id, content: newCommentText }]);
+    setNewCommentText('');
+    const { data } = await supabase.from('channel_comments').select('*, profiles(username, avatar_url)').eq('message_id', openCommentsForMsg.id).order('created_at', { ascending: true });
+    if (data) setCommentsList(data);
+  };
+
+  const saveProfile = async () => {
+    await supabase.from('profiles').update({ full_name: editFullName, username: editUsername, birthdate: editBirthdate, custom_status: editCustomStatus, avatar_url: avatarUrl }).eq('id', session.user.id);
+    alert('Профиль сохранен!');
+    loadProfile();
+  };
+
+  const createCommunity = async () => {
+    if (!communityName.trim()) return;
+    const { data: existing } = await supabase.from('chats').select('id').eq('owner_id', session.user.id).eq('type', communityType);
+    if (existing && existing.length > 0) { alert(`Лимит: 1 ${communityType} на аккаунт.`); return; }
+    const { data: newC } = await supabase.from('chats').insert([{ type: communityType, name: communityName, description: communityDesc, owner_id: session.user.id, is_public: true }]).select().single();
+    if (newC) {
+      await supabase.from('chat_participants').insert([{ chat_id: newC.id, user_id: session.user.id, role: 'owner' }]);
+      setShowCreateCommunityModal(false); fetchMyChats(); setActiveChat(newC.id);
+    }
+  };
+
+  const updateCommunity = async () => {
+    await supabase.from('chats').update({ name: activeChatData.name, description: activeChatData.description, avatar_url: communityAvatar }).eq('id', activeChat);
+    alert('Сохранено'); setShowAdminModal(false); fetchMyChats();
+  };
+
+  const pinMessage = async (msgId) => {
+    await supabase.from('chats').update({ pinned_message_id: msgId }).eq('id', activeChat);
+    alert('Сообщение закреплено!');
+    setSelectedMsgForMenu(null);
+  };
+
+  const addMemberToComm = async () => {
+    const { data: u } = await supabase.from('profiles').select('id').eq('username', newMemberName).single();
+    if (!u) { alert('Пользователь не найден'); return; }
+    await supabase.from('chat_participants').insert({ chat_id: activeChat, user_id: u.id });
+    setNewMemberName(''); alert('Добавлен!');
+  };
+
+  const joinCommunity = async (comm) => {
+    const { data: ex } = await supabase.from('chat_participants').select('id').eq('chat_id', comm.id).eq('user_id', session.user.id);
+    if (!ex || ex.length === 0) await supabase.from('chat_participants').insert([{ chat_id: comm.id, user_id: session.user.id }]);
+    setActiveChat(comm.id); setActiveUser(null); setSearchQuery(''); fetchMyChats();
+  };
+
+  const startChatWithUser = async (targetUser) => {
+    setIsSupportMode(false); setActiveUser(targetUser); setSearchQuery('');
+    const isSaved = targetUser.id === session.user.id;
+    const { data: myP } = await supabase.from('chat_participants').select('chat_id').eq('user_id', session.user.id);
+    const myChatIds = myP?.map(c => c.chat_id) || [];
+
+    if (myChatIds.length > 0) {
+      if (isSaved) {
+        for (let cid of myChatIds) {
+          const { data: p } = await supabase.from('chat_participants').select('user_id').eq('chat_id', cid);
+          if (p && p.length === 1 && p[0].user_id === session.user.id) { setActiveChat(cid); return; }
+        }
+      } else {
+        const { data: cChat } = await supabase.from('chat_participants').select('chat_id').eq('user_id', targetUser.id).in('chat_id', myChatIds).limit(1);
+        if (cChat && cChat.length > 0) { setActiveChat(cChat[0].chat_id); return; }
+      }
+    }
+    const { data: nChat } = await supabase.from('chats').insert([{ type: 'dm' }]).select().single();
+    if (nChat) {
+      if (isSaved) await supabase.from('chat_participants').insert([{ chat_id: nChat.id, user_id: session.user.id }]);
+      else await supabase.from('chat_participants').insert([{ chat_id: nChat.id, user_id: session.user.id }, { chat_id: nChat.id, user_id: targetUser.id }]);
+      setActiveChat(nChat.id); fetchMyChats();
+    }
+  };
+
+  const sendMessage = async (type = 'text', mediaUrl = '') => {
+    if (activeChatData?.type === 'channel' && activeChatData.owner_id !== session.user.id) return;
+    if (editingMsg) {
+      if (!newMessage.trim()) return;
+      await supabase.from('messages').update({ content: newMessage, is_edited: true }).eq('id', editingMsg.id);
+      setEditingMsg(null); setNewMessage(''); return;
+    }
+    const txt = type === 'text' ? newMessage : mediaUrl;
+    if (type === 'text' && !txt.trim()) return;
     if (type === 'text') setNewMessage('');
-    await supabase.from('messages').insert({ chat_id: activeChat, sender_id: session.user.id, content: finalContent, is_read: false });
-    supabase.channel(`chat_${activeChat}`).send({ type: 'broadcast', event: 'typing', payload: { user: myProfile?.username } });
+    const finalContent = replyingMsg ? `💬 [Ответ]\n${txt}` : txt;
+    setReplyingMsg(null);
+    await supabase.from('messages').insert([{ chat_id: activeChat, sender_id: session.user.id, content: finalContent }]);
+  };
+
+  const deleteMessage = async (msgId) => {
+    await supabase.from('messages').delete().eq('id', msgId);
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+    setSelectedMsgForMenu(null);
+  };
+
+  const deleteChat = async () => {
+    if (confirm('Удалить этот чат?')) {
+      await supabase.from('chats').delete().eq('id', activeChat);
+      setActiveChat(null); setActiveUser(null); fetchMyChats();
+    }
+  };
+
+  const toggleReaction = async (msgId, emoji) => {
+    const ex = reactions.find(r => r.message_id === msgId && r.user_id === session.user.id && r.emoji === emoji);
+    if (ex) await supabase.from('message_reactions').delete().eq('id', ex.id);
+    else await supabase.from('message_reactions').insert([{ message_id: msgId, user_id: session.user.id, emoji }]);
+    setSelectedMsgForMenu(null);
   };
 
   const handleMediaUpload = async (e, type) => {
@@ -167,83 +362,38 @@ export default function Home() {
     const { error } = await supabase.storage.from('media').upload(name, file);
     if (!error) {
       const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(name);
-      if (type === 'story') { await supabase.from('stories').insert({ user_id: session.user.id, media_url: publicUrl }); fetchContactStories(); }
+      if (type === 'story') { await supabase.from('stories').insert([{ user_id: session.user.id, media_url: publicUrl }]); fetchStories(); }
+      else if (type === 'avatar') setAvatarUrl(publicUrl);
+      else if (type === 'comm_avatar') setCommunityAvatar(publicUrl);
       else sendMessage('image', `[IMAGE]:${publicUrl}`);
     }
   };
 
-  const kickUser = async (userId) => {
-    if (activeChatData?.owner_id !== session.user.id) return alert('Вы не админ!');
-    await supabase.from('chat_participants').delete().eq('chat_id', activeChat).eq('user_id', userId);
-    setParticipants(participants.filter(p => p.user_id !== userId));
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mediaRecorderRef.current.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mediaRecorderRef.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const name = `voice_${Date.now()}.webm`;
+        const { error } = await supabase.storage.from('media').upload(name, audioBlob);
+        if (!error) {
+          const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(name);
+          sendMessage('voice', `[VOICE]:${publicUrl}`);
+        }
+      };
+      mediaRecorderRef.current.start(); setIsRecording(true);
+    } catch { alert('Микрофон недоступен!'); }
   };
 
-  const handleAuth = async (type) => {
-    setLoading(true);
-    if (type === 'signup') {
-      const { error } = await supabase.auth.signUp({ email: signupEmail, password, options: { data: { username: signupUsername } } });
-      if (error) alert(error.message); else alert('Успешно!');
-    } else {
-      let email = loginInput;
-      if (!email.includes('@')) {
-        const { data: p } = await supabase.from('profiles').select('id').eq('username', email).single();
-        if (p) { const { data: em } = await supabase.rpc('get_email_by_id', { user_id: p.id }); if(em) email = em; }
-      }
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) alert(error.message);
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop(); setIsRecording(false);
     }
-    setLoading(false);
   };
 
-  if (!session) return ( /* Твой дизайн входа */ <div/> );
-
-  return (
-    <div style={{ height: '100vh', display: 'flex', background: THEME.bg, color: '#fff', overflow: 'hidden' }}>
-      {/* SIDEBAR */}
-      <div style={{ width: activeChat ? '0px' : '100%', display: activeChat ? 'none' : 'flex', flexDirection: 'column', borderRight: `1px solid ${THEME.border}` }}>
-         <div style={{ padding: '15px', borderBottom: `1px solid ${THEME.border}` }}><h3>Чаты</h3></div>
-         <div style={{ flex: 1, overflowY: 'auto' }}>
-            {myChats.map(c => (
-                <div key={c.id} onClick={() => setActiveChat(c.id)} style={{ padding: '15px', borderBottom: `1px solid ${THEME.border}`, cursor: 'pointer' }}>
-                    {c.name}
-                </div>
-            ))}
-         </div>
-      </div>
-
-      {/* CHAT */}
-      {activeChat && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${THEME.border}` }}>
-              <button onClick={() => setActiveChat(null)}>←</button>
-              <h3>{activeChatData?.name} {typing && <small style={{color:THEME.primary}}>печатает...</small>}</h3>
-              {activeChatData?.owner_id === session.user.id && <button onClick={() => setShowAdmin(true)}>⚙️</button>}
-          </div>
-
-          <div ref={messagesContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {messages.map(m => (
-              <div key={m.id} style={{ 
-                  alignSelf: m.sender_id === session.user.id ? 'flex-end' : 'flex-start',
-                  background: m.sender_id === session.user.id ? THEME.primary : '#1e293b',
-                  padding: '10px', borderRadius: '10px', maxWidth: '80%', position: 'relative'
-              }}>
-                {m.content.startsWith('[IMAGE]') ? <img src={m.content.replace('[IMAGE]:','')} style={{maxWidth:'200px'}} alt="img"/> : m.content}
-                {m.sender_id === session.user.id && (
-                    <div style={{ fontSize: '9px', textAlign: 'right' }}>{m.is_read ? '◉' : '○'}</div>
-                )}
-                {/* Опция удаления (только админ или владелец сообщения) */}
-                {(m.sender_id === session.user.id || activeChatData?.owner_id === session.user.id) && 
-                    <button onClick={() => deleteMessage(m.id)} style={{fontSize:'8px', background:'red', border:'none'}}>Удалить</button>}
-              </div>
-            ))}
-          </div>
-
-          <form onSubmit={e => { e.preventDefault(); sendMessage(); }} style={{ padding: '10px', borderTop: `1px solid ${THEME.border}`, display: 'flex' }}>
-            <input style={{ flex: 1, background: '#000', color: '#fff', border: 'none', padding: '10px' }} value={newMessage} onChange={e => setNewMessage(e.target.value)} />
-            <button type="submit">Отправить</button>
-          </form>
-        </div>
-      )}
-    </div>
-  );
-}
+  const replyToTicket = async (ticketId) => {
+    const text = replyTicketText[ticketId];
+    if (!text?.trim())
