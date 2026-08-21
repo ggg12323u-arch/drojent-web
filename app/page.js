@@ -1,4 +1,5 @@
 'use client';
+
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -43,11 +44,11 @@ export default function Home() {
   const [activeChat, setActiveChat] = useState(null);
   const [activeChatData, setActiveChatData] = useState(null);
   const [activeUser, setActiveUser] = useState(null);
-  
+
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [showCreateCommunityModal, setShowCreateCommunityModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  
+
   const [communityType, setCommunityType] = useState('group');
   const [communityName, setCommunityName] = useState('');
   const [communityDesc, setCommunityDesc] = useState('');
@@ -102,11 +103,6 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    loadProfile();
-    if(session) { fetchStories(); fetchSupportTickets(); fetchMyChats(); }
-  }, [session]);
-
   const fetchStories = async () => {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data } = await supabase.from('stories').select('*, profiles(username, avatar_url)').gte('created_at', yesterday).order('created_at', { ascending: false });
@@ -146,6 +142,15 @@ export default function Home() {
   };
 
   useEffect(() => {
+    loadProfile();
+    if (session) {
+      fetchStories();
+      fetchSupportTickets();
+      fetchMyChats();
+    }
+  }, [session]);
+
+  useEffect(() => {
     if (!session) return;
     const search = async () => {
       if (!searchQuery.trim()) { setSearchResults([]); setPublicCommunityResults([]); return; }
@@ -173,7 +178,10 @@ export default function Home() {
       await supabase.from('messages').update({ is_read: true }).eq('chat_id', activeChat).neq('sender_id', session.user.id);
     };
     loadChat();
-    const chan = supabase.channel(`chat_${activeChat}`).on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${activeChat}` }, loadChat).on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, loadChat).subscribe();
+    const chan = supabase.channel(`chat_${activeChat}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${activeChat}` }, loadChat)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, loadChat)
+      .subscribe();
     return () => { supabase.removeChannel(chan); };
   }, [activeChat, session]);
 
@@ -204,12 +212,6 @@ export default function Home() {
     if (!u) { alert('Пользователь не найден'); return; }
     await supabase.from('chat_participants').insert({ chat_id: activeChat, user_id: u.id });
     setNewMemberName(''); alert('Добавлен!');
-  };
-
-  const joinCommunity = async (comm) => {
-    const { data: ex } = await supabase.from('chat_participants').select('id').eq('chat_id', comm.id).eq('user_id', session.user.id);
-    if (!ex || ex.length === 0) await supabase.from('chat_participants').insert([{ chat_id: comm.id, user_id: session.user.id }]);
-    setActiveChat(comm.id); setActiveUser(null); setSearchQuery(''); fetchMyChats();
   };
 
   const startChatWithUser = async (targetUser) => {
@@ -252,6 +254,19 @@ export default function Home() {
     await supabase.from('messages').insert([{ chat_id: activeChat, sender_id: session.user.id, content: finalContent }]);
   };
 
+  const deleteMessage = async (msgId) => {
+    await supabase.from('messages').delete().eq('id', msgId);
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+    setSelectedMsgForMenu(null);
+  };
+
+  const deleteChat = async () => {
+    if (confirm('Удалить этот чат?')) {
+      await supabase.from('chats').delete().eq('id', activeChat);
+      setActiveChat(null); setActiveUser(null); fetchMyChats();
+    }
+  };
+
   const toggleReaction = async (msgId, emoji) => {
     const ex = reactions.find(r => r.message_id === msgId && r.user_id === session.user.id && r.emoji === emoji);
     if (ex) await supabase.from('message_reactions').delete().eq('id', ex.id);
@@ -266,8 +281,8 @@ export default function Home() {
     const { error } = await supabase.storage.from('media').upload(name, file);
     if (!error) {
       const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(name);
-      if(type === 'story') { await supabase.from('stories').insert([{ user_id: session.user.id, media_url: publicUrl }]); fetchStories(); }
-      else if(type === 'avatar') setAvatarUrl(publicUrl);
+      if (type === 'story') { await supabase.from('stories').insert([{ user_id: session.user.id, media_url: publicUrl }]); fetchStories(); }
+      else if (type === 'avatar') setAvatarUrl(publicUrl);
       else sendMessage('image', `[IMAGE]:${publicUrl}`);
     }
   };
@@ -277,7 +292,7 @@ export default function Home() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
-      mediaRecorderRef.current.ondataavailable = e => { if(e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mediaRecorderRef.current.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const name = `voice_${Date.now()}.webm`;
@@ -289,6 +304,20 @@ export default function Home() {
       };
       mediaRecorderRef.current.start(); setIsRecording(true);
     } catch { alert('Микрофон недоступен!'); }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop(); setIsRecording(false);
+    }
+  };
+
+  const replyToTicket = async (ticketId) => {
+    const text = replyTicketText[ticketId];
+    if (!text?.trim()) return;
+    await supabase.from('support_tickets').update({ reply: text, status: 'closed' }).eq('id', ticketId);
+    setReplyTicketText(prev => ({ ...prev, [ticketId]: '' }));
+    fetchSupportTickets();
   };
 
   const handleAuth = async (type) => {
@@ -334,19 +363,16 @@ export default function Home() {
 
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', background: '#030712', fontFamily: 'system-ui, sans-serif', color: '#f8fafc', overflow: 'hidden' }}>
-      
-      {/* SIDEBAR */}
       <div style={{ width: (activeChat || isSupportMode) ? '320px' : '100%', display: (activeChat || isSupportMode) ? 'none' : 'flex', flexDirection: 'column', borderRight: '1px solid rgba(56, 189, 248, 0.15)', background: 'rgba(11, 15, 25, 0.85)', backdropFilter: 'blur(12px)', height: '100%' }}>
         <div style={{ padding: '16px', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: '20px', color: '#38bdf8' }}>DroJent {isDeveloper && <Icons.Crown />}</h3>
           <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px' }}>Выйти</button>
         </div>
 
-        {/* Stories */}
         <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(56, 189, 248, 0.1)', display: 'flex', gap: '12px', overflowX: 'auto' }}>
           <label style={{ cursor: 'pointer', flexShrink: 0, textAlign: 'center' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px dashed #38bdf8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>➕</div>
-            <input type="file" accept="image/*" onChange={(e)=>handleMediaUpload(e, 'story')} style={{ display: 'none' }} />
+            <input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'story')} style={{ display: 'none' }} />
           </label>
           {stories.map(st => (
             <div key={st.id} onClick={() => setActiveStory(st)} style={{ cursor: 'pointer', flexShrink: 0, textAlign: 'center' }}>
@@ -357,7 +383,6 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid rgba(56, 189, 248, 0.15)', background: 'rgba(7, 10, 18, 0.8)' }}>
           <button onClick={() => { setActiveTab('chats'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'chats' ? '#38bdf8' : '#64748b', borderBottom: activeTab === 'chats' ? '2px solid #38bdf8' : 'none' }}>Чаты</button>
           <button onClick={() => { setActiveTab('profile'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'profile' ? '#38bdf8' : '#64748b', borderBottom: activeTab === 'profile' ? '2px solid #38bdf8' : 'none' }}>Профиль</button>
@@ -370,7 +395,7 @@ export default function Home() {
               <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#2563eb', margin: '0 auto 10px', overflow: 'hidden' }}>
                 {avatarUrl ? <img src={avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'U'}
               </div>
-              <label style={{ color: '#38bdf8', fontSize: '12px', cursor: 'pointer' }}>Изменить аватар<input type="file" accept="image/*" onChange={(e)=>handleMediaUpload(e,'avatar')} style={{ display: 'none' }}/></label>
+              <label style={{ color: '#38bdf8', fontSize: '12px', cursor: 'pointer' }}>Изменить аватар<input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'avatar')} style={{ display: 'none' }}/></label>
             </div>
             <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', marginBottom: '10px', border: '1px solid #1e293b' }} placeholder="Имя (Full Name)" value={editFullName} onChange={e => setEditFullName(e.target.value)} />
             <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', marginBottom: '10px', border: '1px solid #1e293b' }} placeholder="Username" value={editUsername} onChange={e => setEditUsername(e.target.value)} />
@@ -386,7 +411,7 @@ export default function Home() {
                 {!t.reply && (
                   <div style={{ display: 'flex', gap: '5px' }}>
                     <input style={{ flex: 1, padding: '5px', background: '#000', color: '#fff', border: 'none' }} value={replyTicketText[t.id] || ''} onChange={e => setReplyTicketText({...replyTicketText, [t.id]: e.target.value})} />
-                    <button onClick={() => { replyToTicket(t.id); }}>Ответить</button>
+                    <button onClick={() => replyToTicket(t.id)}>Ответить</button>
                   </div>
                 )}
               </div>
@@ -415,7 +440,7 @@ export default function Home() {
                   return (
                     <div key={i} onClick={() => startChatWithUser(u)} style={{ padding: '12px 16px', borderBottom: '1px solid #1e293b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? '#38bdf8' : '#2563eb', overflow: 'hidden' }}>
-                         {u.avatar_url ? <img src={u.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}}/> : 'U'}
+                         {u.avatar_url ? <img src={u.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="av"/> : 'U'}
                       </div>
                       <div>
                         <div style={{ color: '#fff', display: 'flex', gap: '5px' }}>
@@ -426,6 +451,7 @@ export default function Home() {
                     </div>
                   );
                 }
+                return null;
               })}
             </div>
             {!isDeveloper && (
@@ -437,7 +463,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* MAIN CHAT AREA */}
       <div style={{ flex: 1, display: (!activeChat && !isSupportMode) ? 'none' : 'flex', flexDirection: 'column', background: '#030712' }}>
         {isSupportMode ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -455,7 +480,7 @@ export default function Home() {
             </div>
             <div style={{ padding: '10px', display: 'flex', gap: '10px', borderTop: '1px solid #1e293b' }}>
               <input style={{ flex: 1, padding: '10px', borderRadius: '20px', background: '#1e293b', color: '#fff', border: 'none' }} value={newSupportMsg} onChange={e => setNewSupportMsg(e.target.value)} placeholder="Вопрос..." />
-              <button onClick={() => { if(newSupportMsg) { supabase.from('support_tickets').insert({ user_id: session.user.id, message: newSupportMsg }); setNewSupportMsg(''); } }} style={{ padding: '10px 15px', borderRadius: '20px', background: '#38bdf8', border: 'none' }}><Icons.Send /></button>
+              <button onClick={() => { if(newSupportMsg) { supabase.from('support_tickets').insert({ user_id: session.user.id, message: newSupportMsg }); setNewSupportMsg(''); fetchSupportTickets(); } }} style={{ padding: '10px 15px', borderRadius: '20px', background: '#38bdf8', border: 'none' }}><Icons.Send /></button>
             </div>
           </div>
         ) : activeChat ? (
@@ -479,7 +504,7 @@ export default function Home() {
                 return (
                   <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
                     <div onClick={() => setSelectedMsgForMenu(msg)} style={{ background: isMe ? '#2563eb' : '#1e293b', padding: '10px 14px', borderRadius: '15px', color: '#fff', cursor: 'pointer' }}>
-                      {msg.content.startsWith('[IMAGE]:') ? <img src={msg.content.replace('[IMAGE]:','')} style={{maxWidth:'100%', borderRadius:'8px'}} /> : msg.content.startsWith('[VOICE]:') ? <audio controls src={msg.content.replace('[VOICE]:','')} /> : msg.content}
+                      {msg.content.startsWith('[IMAGE]:') ? <img src={msg.content.replace('[IMAGE]:','')} style={{maxWidth:'100%', borderRadius:'8px'}} alt="media"/> : msg.content.startsWith('[VOICE]:') ? <audio controls src={msg.content.replace('[VOICE]:','')} /> : msg.content}
                       {rcts.length > 0 && <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>{rcts.map(r => <span key={r.id}>{r.emoji}</span>)}</div>}
                     </div>
                   </div>
@@ -491,7 +516,7 @@ export default function Home() {
               <div style={{ padding: '15px', textAlign: 'center', background: '#0b0f19', color: '#94a3b8' }}>Только владелец пишет в канал</div>
             ) : (
               <form onSubmit={e => { e.preventDefault(); sendMessage(); }} style={{ padding: '10px', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
-                <label style={{ cursor: 'pointer', padding: '10px', background: '#1e293b', borderRadius: '50%' }}><Icons.Camera /><input type="file" accept="image/*" onChange={(e)=>handleMediaUpload(e,'img')} style={{display:'none'}}/></label>
+                <label style={{ cursor: 'pointer', padding: '10px', background: '#1e293b', borderRadius: '50%' }}><Icons.Camera /><input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'img')} style={{display:'none'}}/></label>
                 <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '10px', background: isRecording ? '#ef4444' : '#1e293b', border: 'none', borderRadius: '50%' }}>{isRecording ? <Icons.Stop/> : <Icons.Mic/>}</button>
                 <input style={{ flex: 1, padding: '12px', borderRadius: '20px', background: '#030712', color: '#fff', border: '1px solid #1e293b', outline: 'none' }} value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Сообщение..." />
                 <button type="submit" style={{ padding: '12px 15px', borderRadius: '20px', background: '#38bdf8', border: 'none' }}><Icons.Send /></button>
@@ -501,7 +526,6 @@ export default function Home() {
         ) : null}
       </div>
 
-      {/* MODALS */}
       {showAdminModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '15px', width: '300px', border: '1px solid #38bdf8' }}>
@@ -520,12 +544,12 @@ export default function Home() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '15px', width: '300px', border: '1px solid #38bdf8' }}>
             <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-              <button onClick={()=>setCommunityType('group')} style={{ flex: 1, padding: '5px', background: communityType==='group'?'#38bdf8':'#1e293b' }}>Группа</button>
-              <button onClick={()=>setCommunityType('channel')} style={{ flex: 1, padding: '5px', background: communityType==='channel'?'#38bdf8':'#1e293b' }}>Канал</button>
+              <button onClick={() => setCommunityType('group')} style={{ flex: 1, padding: '5px', background: communityType === 'group' ? '#38bdf8' : '#1e293b' }}>Группа</button>
+              <button onClick={() => setCommunityType('channel')} style={{ flex: 1, padding: '5px', background: communityType === 'channel' ? '#38bdf8' : '#1e293b' }}>Канал</button>
             </div>
-            <input value={communityName} onChange={e=>setCommunityName(e.target.value)} placeholder="Название" style={{ width:'100%', padding:'8px', marginBottom:'10px', background:'#030712', color:'#fff' }} />
-            <button onClick={createCommunity} style={{ width:'100%', padding:'8px', background:'#38bdf8' }}>Создать</button>
-            <button onClick={()=>setShowCreateCommunityModal(false)} style={{ width:'100%', padding:'8px', marginTop:'5px', background:'transparent', color:'#fff' }}>Отмена</button>
+            <input value={communityName} onChange={e => setCommunityName(e.target.value)} placeholder="Название" style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff' }} />
+            <button onClick={createCommunity} style={{ width: '100%', padding: '8px', background: '#38bdf8' }}>Создать</button>
+            <button onClick={() => setShowCreateCommunityModal(false)} style={{ width: '100%', padding: '8px', marginTop: '5px', background: 'transparent', color: '#fff' }}>Отмена</button>
           </div>
         </div>
       )}
@@ -534,11 +558,11 @@ export default function Home() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#0b0f19', padding: '15px', borderRadius: '15px', width: '250px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              {REACTION_EMOJIS.map(em => <span key={em} onClick={()=>toggleReaction(selectedMsgForMenu.id, em)} style={{fontSize:'20px', cursor:'pointer'}}>{em}</span>)}
+              {REACTION_EMOJIS.map(em => <span key={em} onClick={() => toggleReaction(selectedMsgForMenu.id, em)} style={{ fontSize: '20px', cursor: 'pointer' }}>{em}</span>)}
             </div>
-            <button onClick={() => { setReplyingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }} style={{ width:'100%', padding:'10px', background:'#1e293b', color:'#fff', border:'none', marginBottom:'5px' }}>Ответить</button>
-            <button onClick={() => deleteMessage(selectedMsgForMenu.id)} style={{ width:'100%', padding:'10px', background:'rgba(239,68,68,0.2)', color:'#f87171', border:'none', marginBottom:'5px' }}>Удалить</button>
-            <button onClick={() => setSelectedMsgForMenu(null)} style={{ width:'100%', padding:'10px', background:'transparent', color:'#fff', border:'none' }}>Отмена</button>
+            <button onClick={() => { setReplyingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }} style={{ width: '100%', padding: '10px', background: '#1e293b', color: '#fff', border: 'none', marginBottom: '5px' }}>Ответить</button>
+            <button onClick={() => deleteMessage(selectedMsgForMenu.id)} style={{ width: '100%', padding: '10px', background: 'rgba(239,68,68,0.2)', color: '#f87171', border: 'none', marginBottom: '5px' }}>Удалить</button>
+            <button onClick={() => setSelectedMsgForMenu(null)} style={{ width: '100%', padding: '10px', background: 'transparent', color: '#fff', border: 'none' }}>Отмена</button>
           </div>
         </div>
       )}
@@ -546,7 +570,7 @@ export default function Home() {
       {activeStory && (
         <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 7000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <button onClick={() => setActiveStory(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', color: '#fff', fontSize: '24px', border: 'none' }}>✖</button>
-          <img src={activeStory.media_url} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '10px' }} />
+          <img src={activeStory.media_url} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '10px' }} alt="st"/>
         </div>
       )}
 
