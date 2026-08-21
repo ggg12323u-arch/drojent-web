@@ -396,4 +396,347 @@ export default function Home() {
 
   const replyToTicket = async (ticketId) => {
     const text = replyTicketText[ticketId];
-    if (!text?.trim())
+    if (!text?.trim()) return;
+    await supabase.from('support_tickets').update({ reply: text, status: 'closed' }).eq('id', ticketId);
+    setReplyTicketText(prev => ({ ...prev, [ticketId]: '' }));
+    fetchSupportTickets();
+  };
+
+  const handleAuth = async (type) => {
+    setLoading(true);
+    if (type === 'signup') {
+      if (!signupUsername || !signupEmail || !password) return alert('Заполните все поля!');
+      const { error } = await supabase.auth.signUp({ email: signupEmail, password, options: { data: { username: signupUsername } } });
+      if (error) alert(error.message); else alert('Успешно! Войдите.');
+    } else {
+      let targetEmail = loginInput.trim();
+      if (!targetEmail.includes('@')) {
+        const { data: p } = await supabase.from('profiles').select('id').eq('username', targetEmail).single();
+        if (p) { const { data: em } = await supabase.rpc('get_email_by_id', { user_id: p.id }); if (em) targetEmail = em; }
+      }
+      const { error } = await supabase.auth.signInWithPassword({ email: targetEmail, password });
+      if (error) alert('Ошибка: ' + error.message);
+    }
+    setLoading(false);
+  };
+
+  if (!session) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#030712', fontFamily: 'system-ui, sans-serif', padding: '16px' }}>
+        <div style={{ width: '100%', maxWidth: '380px', padding: '32px 24px', background: theme.bgCard, backdropFilter: 'blur(16px)', borderRadius: '24px', border: `1px solid ${theme.border}`, boxShadow: `0 0 35px ${theme.glow}`, color: '#f8fafc' }}>
+          <h2 style={{ margin: '0 0 8px 0', textAlign: 'center', color: theme.primary, textShadow: `0 0 12px ${theme.glow}` }}>DroJent</h2>
+          <p style={{ margin: '0 0 24px 0', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>Neon Glass Messenger</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input style={{ padding: '12px', borderRadius: '12px', border: `1px solid ${theme.border}`, background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none' }} placeholder="Username или Email" value={loginInput} onChange={e => setLoginInput(e.target.value)} />
+            <input style={{ padding: '12px', borderRadius: '12px', border: `1px solid ${theme.border}`, background: 'rgba(3, 7, 18, 0.6)', color: '#fff', outline: 'none' }} type="password" placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} />
+            <button disabled={loading} style={{ padding: '12px', borderRadius: '12px', border: 'none', background: theme.gradient, color: '#fff', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => handleAuth('login')}>Войти</button>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: '10px', paddingTop: '10px' }}>
+              <input style={{ padding: '10px', borderRadius: '10px', background: 'rgba(3,7,18,0.6)', color: '#fff', width: '100%', marginBottom: '8px', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Придумайте Username" value={signupUsername} onChange={e => setSignupUsername(e.target.value)} />
+              <input style={{ padding: '10px', borderRadius: '10px', background: 'rgba(3,7,18,0.6)', color: '#fff', width: '100%', marginBottom: '8px', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Email" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} />
+              <button disabled={loading} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${theme.primary}`, background: 'transparent', color: theme.primary, fontWeight: 'bold', cursor: 'pointer' }} onClick={() => handleAuth('signup')}>Регистрация</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const isDeveloper = session.user.email === DEV_EMAIL;
+
+  return (
+    <div style={{ height: '100vh', width: '100vw', display: 'flex', background: '#030712', fontFamily: 'system-ui, sans-serif', color: '#f8fafc', overflow: 'hidden' }}>
+      
+      {/* SIDEBAR */}
+      <div style={{ width: (activeChat || isSupportMode) ? '320px' : '100%', display: (activeChat || isSupportMode) ? 'none' : 'flex', flexDirection: 'column', borderRight: `1px solid ${theme.border}`, background: 'rgba(11, 15, 25, 0.85)', backdropFilter: 'blur(16px)', height: '100%' }}>
+        <div style={{ padding: '16px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '20px', color: theme.primary, textShadow: `0 0 10px ${theme.glow}` }}>DroJent {isDeveloper && <Icons.Crown />}</h3>
+          <button onClick={() => supabase.auth.signOut()} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #f87171', background: 'transparent', color: '#f87171', fontSize: '12px', cursor: 'pointer' }}>Выйти</button>
+        </div>
+
+        {/* Stories */}
+        <div style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, display: 'flex', gap: '12px', overflowX: 'auto', background: 'rgba(7, 10, 18, 0.6)' }}>
+          <label style={{ cursor: 'pointer', flexShrink: 0, textAlign: 'center' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: `2px dashed ${theme.primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.primary }}>➕</div>
+            <input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'story')} style={{ display: 'none' }} />
+          </label>
+          {stories.map(st => (
+            <div key={st.id} onClick={() => setActiveStory(st)} style={{ cursor: 'pointer', flexShrink: 0, textAlign: 'center' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: `2px solid ${theme.primary}`, boxShadow: `0 0 10px ${theme.glow}`, overflow: 'hidden' }}>
+                <img src={st.media_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="st"/>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}`, background: 'rgba(7, 10, 18, 0.8)' }}>
+          <button onClick={() => { setActiveTab('chats'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'chats' ? theme.primary : '#64748b', borderBottom: activeTab === 'chats' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Чаты</button>
+          <button onClick={() => { setActiveTab('profile'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'profile' ? theme.primary : '#64748b', borderBottom: activeTab === 'profile' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Профиль</button>
+          {isDeveloper && <button onClick={() => { setActiveTab('tickets'); setIsSupportMode(false); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: 'none', color: activeTab === 'tickets' ? theme.primary : '#64748b', borderBottom: activeTab === 'tickets' ? `2px solid ${theme.primary}` : 'none', fontWeight: 'bold', cursor: 'pointer' }}>Тикеты</button>}
+        </div>
+
+        {activeTab === 'profile' ? (
+          <div style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+              <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: theme.secondary, margin: '0 auto 10px', overflow: 'hidden', border: `2px solid ${theme.primary}`, boxShadow: `0 0 15px ${theme.glow}` }}>
+                {avatarUrl ? <img src={avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="avatar"/> : 'U'}
+              </div>
+              <label style={{ color: theme.primary, fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>Изменить аватар<input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'avatar')} style={{ display: 'none' }}/></label>
+            </div>
+
+            {/* Выбор Неоновой Темы */}
+            <div style={{ background: 'rgba(3, 7, 18, 0.6)', padding: '12px', borderRadius: '12px', border: `1px solid ${theme.border}` }}>
+              <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Тема оформления:</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setThemeKey('blue')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#0284c7', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>Синий</button>
+                <button onClick={() => setThemeKey('green')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#16a34a', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>Зелёный</button>
+                <button onClick={() => setThemeKey('purple')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', background: '#9333ea', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>Фиолетовый</button>
+              </div>
+            </div>
+
+            <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Имя (Full Name)" value={editFullName} onChange={e => setEditFullName(e.target.value)} />
+            <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Username" value={editUsername} onChange={e => setEditUsername(e.target.value)} />
+            <input style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(3,7,18,0.6)', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none', boxSizing: 'border-box' }} placeholder="Статус" value={editCustomStatus} onChange={e => setEditCustomStatus(e.target.value)} />
+            <button onClick={saveProfile} style={{ width: '100%', padding: '12px', borderRadius: '10px', background: theme.gradient, color: '#fff', fontWeight: 'bold', cursor: 'pointer', border: 'none' }}>Сохранить профиль</button>
+          </div>
+        ) : activeTab === 'tickets' ? (
+          <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
+            {tickets.map(t => (
+              <div key={t.id} style={{ padding: '12px', background: 'rgba(30,41,59,0.6)', borderRadius: '12px', marginBottom: '10px', border: `1px solid ${theme.border}` }}>
+                <div style={{ color: theme.primary, fontSize: '12px', fontWeight: 'bold' }}>@{t.profiles?.username}</div>
+                <div style={{ color: '#fff', fontSize: '14px', margin: '5px 0' }}>{t.message}</div>
+                {!t.reply && (
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    <input style={{ flex: 1, padding: '6px', background: '#000', color: '#fff', border: 'none', borderRadius: '6px' }} value={replyTicketText[t.id] || ''} onChange={e => setReplyTicketText({...replyTicketText, [t.id]: e.target.value})} placeholder="Ответ..." />
+                    <button onClick={() => replyToTicket(t.id)} style={{ padding: '6px 12px', background: theme.primary, color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}>Ответить</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <button onClick={() => setShowCreateCommunityModal(true)} style={{ margin: '10px', padding: '10px', border: `1px solid ${theme.primary}`, background: 'rgba(56,189,248,0.1)', color: theme.primary, borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>➕ Создать Группу / Канал</button>
+            <input style={{ margin: '0 10px 10px', padding: '10px', background: '#030712', border: `1px solid ${theme.border}`, color: '#fff', borderRadius: '10px', outline: 'none' }} placeholder="Поиск..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {(searchQuery ? [...publicCommunityResults, ...searchResults] : myChats).map((item, i) => {
+                const c = item.isGroupOrChannel ? item.chatDetails : item;
+                const u = item.profiles || (!item.isGroupOrChannel ? item : null);
+                if (c?.type === 'group' || c?.type === 'channel') {
+                  return (
+                    <div key={i} onClick={() => joinCommunity(c)} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: activeChat === c.id ? 'rgba(255,255,255,0.05)' : 'transparent' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: c.type==='channel' ? '#8b5cf6' : '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                        {c.avatar_url ? <img src={c.avatar_url} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="comm"/> : (c.type==='channel'?'📢':'👥')}
+                      </div>
+                      <div>
+                        <div style={{ color: '#fff', fontWeight: '600' }}>{c.name} {c.is_verified && '✅'}</div>
+                        <div style={{ color: '#94a3b8', fontSize: '11px' }}>{c.type==='channel'?'Канал':'Группа'}</div>
+                      </div>
+                    </div>
+                  );
+                }
+                if (u) {
+                  return (
+                    <div key={i} onClick={() => startChatWithUser(u)} style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: activeUser?.id === u.id ? 'rgba(255,255,255,0.05)' : 'transparent' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: u.id === session.user.id ? theme.primary : '#2563eb', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                         {u.avatar_url ? <img src={u.avatar_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="av"/> : 'U'}
+                      </div>
+                      <div>
+                        <div style={{ color: '#fff', display: 'flex', gap: '5px', fontWeight: '600' }}>
+                          {u.full_name || u.username} {u.status_badge === '👑 Developer' && <Icons.Crown />}
+                        </div>
+                        <div style={{ color: '#94a3b8', fontSize: '11px' }}>@{u.username}</div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })}
+            </div>
+            {!isDeveloper && (
+              <div onClick={() => { setIsSupportMode(true); setActiveChat(null); }} style={{ padding: '15px', background: 'rgba(56,189,248,0.1)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', color: theme.primary, fontWeight: 'bold' }}>
+                <div style={{ color: theme.primary }}><Icons.Support /></div> Служба поддержки
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* MAIN CHAT AREA */}
+      <div style={{ flex: 1, display: (!activeChat && !isSupportMode) ? 'none' : 'flex', flexDirection: 'column', background: '#030712' }}>
+        {isSupportMode ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '12px 16px', background: 'rgba(11, 15, 25, 0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: `1px solid ${theme.border}` }}>
+              <button onClick={() => setIsSupportMode(false)} style={{ background: 'transparent', border: 'none', color: theme.primary, cursor: 'pointer' }}><Icons.Back /></button>
+              <h3 style={{ margin: 0, color: theme.primary }}>Служба поддержки</h3>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {mySupportMessages.map(t => (
+                <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <div style={{ alignSelf: 'flex-end', background: theme.gradient, padding: '10px 14px', borderRadius: '16px 16px 2px 16px', color: '#fff' }}>{t.message}</div>
+                  {t.reply && <div style={{ alignSelf: 'flex-start', background: 'rgba(56,189,248,0.15)', border: `1px solid ${theme.border}`, padding: '10px 14px', borderRadius: '16px 16px 16px 2px', color: theme.primary }}>Ответ: {t.reply}</div>}
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '10px', display: 'flex', gap: '10px', borderTop: `1px solid ${theme.border}` }}>
+              <input style={{ flex: 1, padding: '10px 16px', borderRadius: '20px', background: '#1e293b', color: '#fff', border: 'none', outline: 'none' }} value={newSupportMsg} onChange={e => setNewSupportMsg(e.target.value)} placeholder="Опишите проблему..." />
+              <button onClick={() => { if(newSupportMsg) { supabase.from('support_tickets').insert({ user_id: session.user.id, message: newSupportMsg }); setNewSupportMsg(''); fetchSupportTickets(); } }} style={{ padding: '10px 18px', borderRadius: '20px', background: theme.primary, border: 'none', cursor: 'pointer' }}><Icons.Send /></button>
+            </div>
+          </div>
+        ) : activeChat ? (
+          <>
+            <div style={{ padding: '12px 16px', background: 'rgba(11, 15, 25, 0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button onClick={() => { setActiveChat(null); setActiveUser(null); }} style={{ background: 'transparent', border: 'none', color: theme.primary, cursor: 'pointer' }}><Icons.Back /></button>
+                <div>
+                  <h3 onClick={() => { if(activeChatData?.owner_id === session.user.id) setShowAdminModal(true); else if(activeUser) setShowUserProfileModal(true); }} style={{ margin: 0, color: theme.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    {activeChatData?.type === 'group' ? `👥 ${activeChatData.name}` : activeChatData?.type === 'channel' ? `📢 ${activeChatData.name}` : (activeUser?.id === session.user.id ? '🔖 Избранное' : activeUser?.full_name || activeUser?.username)}
+                    {activeChatData?.is_verified && '✅'}
+                    {activeUser?.status_badge === '👑 Developer' && <Icons.Crown />}
+                  </h3>
+                </div>
+              </div>
+              <button onClick={deleteChat} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><Icons.Trash /></button>
+            </div>
+
+            {/* Закреплённое сообщение */}
+            {pinnedMsgData && (
+              <div style={{ padding: '8px 16px', background: 'rgba(56, 189, 248, 0.1)', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: theme.primary }}>
+                <Icons.Pin />
+                <span style={{ fontWeight: 'bold' }}>Закреплено:</span>
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, color: '#fff' }}>{pinnedMsgData.content}</span>
+              </div>
+            )}
+
+            <div ref={messagesContainerRef} style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {messages.map(msg => {
+                const isMe = msg.sender_id === session.user.id;
+                const rcts = reactions.filter(r => r.message_id === msg.id);
+                return (
+                  <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                    <div onClick={() => setSelectedMsgForMenu(msg)} style={{ background: isMe ? theme.gradient : 'rgba(30, 41, 59, 0.75)', padding: '10px 14px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', color: '#fff', cursor: 'pointer', border: isMe ? 'none' : `1px solid ${theme.border}` }}>
+                      {msg.content.startsWith('[IMAGE]:') ? <img src={msg.content.replace('[IMAGE]:','')} style={{maxWidth:'100%', borderRadius:'8px'}} alt="media"/> : msg.content.startsWith('[VOICE]:') ? <audio controls src={msg.content.replace('[VOICE]:','')} /> : msg.content}
+                      {rcts.length > 0 && <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>{rcts.map(r => <span key={r.id}>{r.emoji}</span>)}</div>}
+                    </div>
+
+                    {/* Комментарии под постом в канале */}
+                    {activeChatData?.type === 'channel' && (
+                      <button onClick={() => setOpenCommentsForMsg(msg)} style={{ marginTop: '4px', background: 'transparent', border: 'none', color: theme.primary, fontSize: '11px', cursor: 'pointer' }}>
+                        💬 Комментарии
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {activeChatData?.type === 'channel' && activeChatData.owner_id !== session.user.id ? (
+              <div style={{ padding: '15px', textAlign: 'center', background: '#0b0f19', color: '#94a3b8' }}>Только владелец пишет в канал</div>
+            ) : (
+              <form onSubmit={e => { e.preventDefault(); sendMessage(); }} style={{ padding: '10px', background: '#0b0f19', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0, borderTop: `1px solid ${theme.border}` }}>
+                <label style={{ cursor: 'pointer', padding: '10px', background: 'rgba(30, 41, 59, 0.8)', borderRadius: '50%', color: theme.primary }}><Icons.Camera /><input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'img')} style={{display:'none'}}/></label>
+                <button type="button" onClick={isRecording ? stopRecording : startRecording} style={{ padding: '10px', background: isRecording ? '#ef4444' : 'rgba(30, 41, 59, 0.8)', border: 'none', borderRadius: '50%', color: theme.primary, cursor: 'pointer' }}>{isRecording ? <Icons.Stop/> : <Icons.Mic/>}</button>
+                <input style={{ flex: 1, padding: '12px', borderRadius: '20px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none' }} value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Сообщение..." />
+                <button type="submit" style={{ padding: '12px 18px', borderRadius: '20px', background: theme.gradient, border: 'none', cursor: 'pointer' }}><Icons.Send /></button>
+              </form>
+            )}
+          </>
+        ) : null}
+      </div>
+
+      {/* Окно комментариев */}
+      {openCommentsForMsg && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0b0f19', borderRadius: '20px', border: `1px solid ${theme.border}`, width: '100%', maxWidth: '360px', height: '80vh', display: 'flex', flexDirection: 'column', padding: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.border}`, paddingBottom: '10px' }}>
+              <h4 style={{ margin: 0, color: theme.primary }}>Комментарии</h4>
+              <button onClick={() => setOpenCommentsForMsg(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>✖</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {commentsList.map(c => (
+                <div key={c.id} style={{ background: 'rgba(30,41,59,0.5)', padding: '8px 12px', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '11px', color: theme.primary, fontWeight: 'bold' }}>@{c.profiles?.username}</div>
+                  <div style={{ fontSize: '13px', color: '#fff' }}>{c.content}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '8px', paddingTop: '10px', borderTop: `1px solid ${theme.border}` }}>
+              <input style={{ flex: 1, padding: '8px 12px', borderRadius: '12px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, outline: 'none' }} placeholder="Написать комментарий..." value={newCommentText} onChange={e => setNewCommentText(e.target.value)} />
+              <button onClick={sendComment} style={{ padding: '8px 14px', background: theme.primary, border: 'none', borderRadius: '12px', color: '#000', fontWeight: 'bold', cursor: 'pointer' }}>➔</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Админ-панель канала / группы */}
+      {showAdminModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '20px', width: '300px', border: `1px solid ${theme.border}` }}>
+            <h3 style={{ color: theme.primary, marginTop: 0 }}>Админ-панель</h3>
+            
+            <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+              <label style={{ color: theme.primary, fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>
+                📷 Изменить аватарку канала
+                <input type="file" accept="image/*" onChange={(e) => handleMediaUpload(e, 'comm_avatar')} style={{ display: 'none' }} />
+              </label>
+            </div>
+
+            <input value={activeChatData?.name || ''} onChange={(e) => setActiveChatData({...activeChatData, name: e.target.value})} style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} placeholder="Название" />
+            <input value={activeChatData?.description || ''} onChange={(e) => setActiveChatData({...activeChatData, description: e.target.value})} style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} placeholder="Описание" />
+            <input value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Username участника" style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} />
+            <button onClick={addMemberToComm} style={{ width: '100%', padding: '8px', background: theme.primary, border: 'none', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer', fontWeight: 'bold' }}>Добавить участника</button>
+            <button onClick={updateCommunity} style={{ width: '100%', padding: '8px', background: theme.gradient, border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>Сохранить изменения</button>
+            <button onClick={() => setShowAdminModal(false)} style={{ width: '100%', padding: '8px', marginTop: '10px', background: 'transparent', color: '#f87171', border: 'none', cursor: 'pointer' }}>Закрыть</button>
+          </div>
+        </div>
+      )}
+
+      {showCreateCommunityModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '20px', width: '300px', border: `1px solid ${theme.border}` }}>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              <button onClick={() => setCommunityType('group')} style={{ flex: 1, padding: '8px', background: communityType==='group'?theme.primary:'#1e293b', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>👥 Группа</button>
+              <button onClick={() => setCommunityType('channel')} style={{ flex: 1, padding: '8px', background: communityType==='channel'?theme.primary:'#1e293b', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>📢 Канал</button>
+            </div>
+            <input value={communityName} onChange={e => setCommunityName(e.target.value)} placeholder="Название..." style={{ width: '100%', padding: '8px', marginBottom: '10px', background: '#030712', color: '#fff', border: `1px solid ${theme.border}`, borderRadius: '8px' }} />
+            <button onClick={createCommunity} style={{ width: '100%', padding: '10px', background: theme.gradient, color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Создать</button>
+            <button onClick={() => setShowCreateCommunityModal(false)} style={{ width: '100%', padding: '8px', marginTop: '5px', background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer' }}>Отмена</button>
+          </div>
+        </div>
+      )}
+
+      {/* Меню взаимодействия с сообщением */}
+      {selectedMsgForMenu && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#0b0f19', padding: '15px', borderRadius: '20px', width: '260px', border: `1px solid ${theme.border}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              {REACTION_EMOJIS.map(em => <span key={em} onClick={() => toggleReaction(selectedMsgForMenu.id, em)} style={{ fontSize: '20px', cursor: 'pointer' }}>{em}</span>)}
+            </div>
+            <button onClick={() => pinMessage(selectedMsgForMenu.id)} style={{ width: '100%', padding: '10px', background: 'rgba(30,41,59,0.8)', color: '#fff', border: 'none', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>📌 Закрепить</button>
+            <button onClick={() => { setReplyingMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }} style={{ width: '100%', padding: '10px', background: 'rgba(30,41,59,0.8)', color: '#fff', border: 'none', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>💬 Ответить</button>
+            <button onClick={() => deleteMessage(selectedMsgForMenu.id)} style={{ width: '100%', padding: '10px', background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid #f87171', borderRadius: '8px', marginBottom: '5px', cursor: 'pointer' }}>🗑️ Удалить</button>
+            <button onClick={() => setSelectedMsgForMenu(null)} style={{ width: '100%', padding: '8px', background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer' }}>Отмена</button>
+          </div>
+        </div>
+      )}
+
+      {activeStory && (
+        <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 7000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => setActiveStory(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', color: '#fff', fontSize: '24px', border: 'none', cursor: 'pointer' }}>✖</button>
+          <img src={activeStory.media_url} style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '10px' }} alt="st"/>
+        </div>
+      )}
+
+      {showUserProfileModal && activeUser && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#0b0f19', padding: '20px', borderRadius: '20px', textAlign: 'center', color: '#fff', border: `1px solid ${theme.border}` }}>
+            <h2>{activeUser.full_name || activeUser.username} {activeUser.status_badge === '👑 Developer' && <Icons.Crown />}</h2>
+            <p style={{ color: theme.primary }}>@{activeUser.username}</p>
+            <p style={{ fontStyle: 'italic', color: '#94a3b8' }}>«{activeUser.custom_status || 'Без статуса'}»</p>
+            <button onClick={() => setShowUserProfileModal(false)} style={{ padding: '8px 20px', background: theme.primary, border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Закрыть</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
