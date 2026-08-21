@@ -8,7 +8,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const DEV_EMAIL = 'ggg12323u@gmail.com';
-const NEON_EMOJIS = ['⚡', '💎', '🔥', '😭', '♥️', '😅'];
+const NEON_EMOJIS = ['⚡', '💎', '🔥', '🔮', '🚀', '🌌'];
 
 const THEMES = {
   blue: { primary: '#38bdf8', secondary: '#2563eb', border: 'rgba(56, 189, 248, 0.3)', bgCard: 'rgba(15, 23, 42, 0.8)' },
