@@ -23,12 +23,16 @@ self.addEventListener('push', (event) => {
   try { data = event.data ? event.data.json() : {}; } catch (e) { data = { title: 'DroJent', body: event.data ? event.data.text() : '' }; }
 
   const title = data.title || 'DroJent';
+  const isCall = !!data.isCall;
   const options = {
     body: data.body || 'Новое сообщение',
     icon: data.icon || '/icon.jpg',
     badge: data.badge || '/icon.jpg',
     data: { url: data.url || '/' },
-    vibrate: [100, 50, 100]
+    tag: data.tag,
+    // Звонок вибрирует дольше и настойчивее и не гаснет сам, пока не нажмут
+    vibrate: isCall ? [500, 200, 500, 200, 500, 200, 500] : [100, 50, 100],
+    requireInteraction: isCall,
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
