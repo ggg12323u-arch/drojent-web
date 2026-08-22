@@ -25,8 +25,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'DroJent';
   const options = {
     body: data.body || 'Новое сообщение',
-    icon: data.icon || '/icons/icon-192.png',
-    badge: data.badge || '/icons/icon-192.png',
+    icon: data.icon || '/icon.jpg',
+    badge: data.badge || '/icon.jpg',
     data: { url: data.url || '/' },
     vibrate: [100, 50, 100]
   };
